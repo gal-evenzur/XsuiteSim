@@ -94,34 +94,49 @@ init = xt.TwissInit(betx=1.0, alfx=0, bety=1.0, alfy=0)  # example values
 tw = line.twiss(
     method='4d',
     init=init,
-    start='d0',
     end='_end_point',
 )
 
 
+# Transverse normalized emittances
+nemitt_x = 2.5e-6
+nemitt_y = 2.5e-6
+
+# Longitudinal emittance from energy spread
+sigma_pzeta = 2e-4
+gemitt_zeta = sigma_pzeta**2 * 1.0
+# similarly, if the bunch length is known, the emittance can be computed as
+# gemitt_zeta = sigma_zeta**2 / tw.bets0
+
+# Compute beam sizes
+beam_sizes = tw.get_beam_covariance(nemitt_x=nemitt_x, nemitt_y=nemitt_y,
+                                    gemitt_zeta=gemitt_zeta)
+
+# Inspect beam sizes (table can be accessed similarly to twiss tables)
+beam_sizes.show()
+
+# Plot
 import matplotlib.pyplot as plt
 plt.close('all')
 
 fig1 = plt.figure(1, figsize=(6.4, 4.8*1.5))
 spbet = plt.subplot(3,1,1)
-spco = plt.subplot(3,1,2, sharex=spbet)
-spdisp = plt.subplot(3,1,3, sharex=spbet)
+spdisp = plt.subplot(3,1,2, sharex=spbet)
+spbsz = plt.subplot(3,1,3, sharex=spbet)
 
-spbet.plot(tw.s, tw.betx, label='betx')
-spbet.plot(tw.s, tw.bety, label='bety')
+spbet.plot(tw.s, tw.betx)
+spbet.plot(tw.s, tw.bety)
 spbet.set_ylabel(r'$\beta_{x,y}$ [m]')
-spbet.legend()
 
-spco.plot(tw.s, tw.x, label='x')
-spco.plot(tw.s, tw.y, label='y')
-spco.set_ylabel(r'$x,y$ [m]')
-spco.legend()
-
-spdisp.plot(tw.s, tw.dx, label='dx')
-spdisp.plot(tw.s, tw.dy, label='dy')
+spdisp.plot(tw.s, tw.dx)
+spdisp.plot(tw.s, tw.dy)
 spdisp.set_ylabel(r'$D_{x,y}$ [m]')
-spdisp.set_xlabel('s [m]')
-spdisp.legend()
+
+spbsz.plot(beam_sizes.s, beam_sizes.sigma_x)
+spbsz.plot(beam_sizes.s, beam_sizes.sigma_y)
+spbsz.set_ylabel(r'$\sigma_{x,y}$ [m]')
+spbsz.set_xlabel('s [m]')
+
 
 fig1.subplots_adjust(left=.15, right=.92, hspace=.27)
 plt.show()
