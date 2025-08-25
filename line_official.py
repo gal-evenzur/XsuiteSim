@@ -64,23 +64,18 @@ env['kq_n'] = grad_kG_to_k(28.86)
 env['kd'] = B_T_to_k(0.219)
 
 
-env['qL'] = 0.3
+env['qL'] = 1
 
-# env.new('q0', xt.Quadrupole, length=1.0, k1='kq_p')
-# env.new('q1', xt.Quadrupole, length='qL', k1s='kq_n')
-# env.new('q2', xt.Quadrupole, length=1.0, k1='kq_p')
-# env.new('dd', xt.Bend, length=0.5, k0='kd')
 
 line = env.new_line(components=[
-    env.new('d0', xt.Drift, length=0.5),
-    env.new('q0', xt.Quadrupole, length=1.0, k1='kq_p'),
-    env.new('d0.1', xt.Drift, length=1.2),
+    env.new('d0', xt.Drift, length=3.6),
+    env.new('q0', xt.Quadrupole, length='qL', k1='kq_p'),
+    env.new('d0.1', xt.Drift, length=1.3),
     env.new('q1', xt.Quadrupole, length='qL', k1s='kq_n'),
-    env.new('d1.2', xt.Drift, length=1.2),
-    env.new('q2', xt.Quadrupole, length=1.0, k1='kq_p'),
+    env.new('d1.2', xt.Drift, length=1.3),
+    env.new('q2', xt.Quadrupole, length='qL', k1='kq_p'),
     env.new('d2.2', xt.Drift, length=1.2),
     env.new('dd', xt.Bend, length=0.5, k0='kd'),
-
 ])
 
 
@@ -94,7 +89,7 @@ line.build_tracker()
 
 
 
-init = xt.TwissInit(betx=10, alfx=0, bety=10, alfy=0)  # example values
+init = xt.TwissInit(betx=1.0, alfx=0, bety=1.0, alfy=0)  # example values
 
 tw = line.twiss(
     method='4d',
@@ -112,18 +107,21 @@ spbet = plt.subplot(3,1,1)
 spco = plt.subplot(3,1,2, sharex=spbet)
 spdisp = plt.subplot(3,1,3, sharex=spbet)
 
-spbet.plot(tw.s, tw.betx)
-spbet.plot(tw.s, tw.bety)
+spbet.plot(tw.s, tw.betx, label='betx')
+spbet.plot(tw.s, tw.bety, label='bety')
 spbet.set_ylabel(r'$\beta_{x,y}$ [m]')
+spbet.legend()
 
-spco.plot(tw.s, tw.x)
-spco.plot(tw.s, tw.y)
-spco.set_ylabel(r'(Closed orbit)$_{x,y}$ [m]')
+spco.plot(tw.s, tw.x, label='x')
+spco.plot(tw.s, tw.y, label='y')
+spco.set_ylabel(r'$x,y$ [m]')
+spco.legend()
 
-spdisp.plot(tw.s, tw.dx)
-spdisp.plot(tw.s, tw.dy)
+spdisp.plot(tw.s, tw.dx, label='dx')
+spdisp.plot(tw.s, tw.dy, label='dy')
 spdisp.set_ylabel(r'$D_{x,y}$ [m]')
 spdisp.set_xlabel('s [m]')
+spdisp.legend()
 
 fig1.subplots_adjust(left=.15, right=.92, hspace=.27)
 plt.show()
