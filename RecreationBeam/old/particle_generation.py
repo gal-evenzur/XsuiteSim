@@ -456,3 +456,5 @@ plot_divergence(secondary_states_at_foil,f"Secondaries at z = 30 cm")
 
 ### plot the differences in x,y,px,py
 plot_2h(primary_states_at_foil,secondary_states_at_foil)
+
+plt.show()

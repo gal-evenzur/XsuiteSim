@@ -14,9 +14,10 @@ from matplotlib.animation import FuncAnimation, PillowWriter
 
 
 import argparse
+'''
 parser = argparse.ArgumentParser(description='serial_analyzer.py...')
-parser.add_argument('-mag', metavar='magnets settings (run 502 or run 490)', required=True,  help='magnets settings (run 502 or run 490)')
-parser.add_argument('-gen', metavar='particles to generate', required=True,  help='particles to generate')
+parser.add_argument('-mag', metavar='magnets settings (run 502 or run 490)', required=False,  help='magnets settings (run 502 or run 490)')
+parser.add_argument('-gen', metavar='particles to generate', required=False,  help='particles to generate')
 parser.add_argument('-acc', metavar='require full acceptance?', required=False,  help='require full acceptance?')
 parser.add_argument('-mlt', metavar='multi processing?', required=False,  help='multi processing?')
 parser.add_argument('-shw', metavar='show plots?', required=False,  help='show plots?')
@@ -36,6 +37,15 @@ mltprc  = True if(argus.mlt is not None and argus.mlt=="1") else False
 doshw   = True if(argus.shw is not None and argus.shw=="1") else False
 dogif   = True if(argus.gif is not None and argus.gif=="1") else False
 
+'''
+
+
+Nparticles = 1000
+MagnetsSettings = 502
+mltprc = True
+doshw  = True
+dogif = False
+fullacc = False
 
 
 plt.rcParams['image.cmap'] = 'afmhot'
@@ -1785,6 +1795,7 @@ if __name__ == "__main__":
     plt.savefig(f"{pdfname}_energy.pdf")
     if(doshw): plt.show()
     
+    plt.show()
     
     # ### save config to pickle
     # data = {
