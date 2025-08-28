@@ -108,10 +108,36 @@ env.elements['md'] = xt.ParticlesMonitor(num_particles=num_monitor_particles,
                                 start_at_turn=0, stop_at_turn=1,
                                 auto_to_numpy=True)
 
+# We'll define the number of particles after loading the file
+# Use a default value for now and update after loading
+num_monitor_particles = 10000
+
+env.elements['m0'] = xt.ParticlesMonitor(num_particles=num_monitor_particles,
+                                start_at_turn=0, stop_at_turn=1,
+                                auto_to_numpy=True)
+env.elements['m1'] = xt.ParticlesMonitor(num_particles=num_monitor_particles,
+                                start_at_turn=0, stop_at_turn=1,
+                                auto_to_numpy=True)
+env.elements['m2'] = xt.ParticlesMonitor(num_particles=num_monitor_particles,
+                                start_at_turn=0, stop_at_turn=1,
+                                auto_to_numpy=True)
+env.elements['md'] = xt.ParticlesMonitor(num_particles=num_monitor_particles,
+                                start_at_turn=0, stop_at_turn=1,
+                                auto_to_numpy=True)
+
 # Creating Line 
 line = env.new_line(components=[
     env.new('d0', xt.Drift, length=3.6),
+    env.new('q0', xt.Quadrupole, length='qL', k1='kq_p'),
+    env.new('d0.1', xt.Drift, length=1.3),
+    env.new('q1', xt.Quadrupole, length='qL', k1s='kq_n'),
+    env.new('d1.2', xt.Drift, length=1.3),
+    env.new('q2', xt.Quadrupole, length='qL', k1='kq_p'),
+    env.new('d2.2', xt.Drift, length=1.2),
+    env.new('dd', xt.Bend, length=0.5, k0='kd'),
 ])
+
+
 
 
 line.particle_ref = xt.Particles(
@@ -270,7 +296,7 @@ def plot_divergence(XX, PX, YY, PY, title=""):
     fig, axs = plt.subplots(1, 2, figsize=(10, 5), tight_layout=True)
            
     # hdivx = axs[0].hist2d(XX, PX, bins=(100,100), range=[[-6e-4,+6e-4],[-3e-3,+3e-3]], rasterized=True)
-    hdivx, _, _, im = axs[0].hist2d(XX, PX, bins=(100,100), rasterized=True, norm=LogNorm())
+    hdivx, _, _, im = axs[0].hist2d(XX, PX, bins=(100,100), rasterized=True)
     axs[0].set_xlabel(r'$x$ [m]')
     axs[0].set_ylabel(r'$p_x$ [GeV]')
     axs[0].xaxis.set_minor_locator(AutoMinorLocator(10))
@@ -281,9 +307,9 @@ def plot_divergence(XX, PX, YY, PY, title=""):
 
 
     # hdivy = axs[1].hist2d(YY, PY, bins=(100,100), range=[[-6e-4,+6e-4],[-3e-3,+3e-3]], rasterized=True)
-    hdivy, _, _, im = axs[1].hist2d(XX, PX, bins=(100,100), rasterized=True)
-    axs[1].set_xlabel(r'$x$ [m]')
-    axs[1].set_ylabel(r'$p_x$ [GeV]')
+    hdivy, _, _, im = axs[1].hist2d(YY, PY, bins=(100,100), rasterized=True)
+    axs[1].set_xlabel(r'$y$ [m]')
+    axs[1].set_ylabel(r'$p_y$ [GeV]')
     axs[1].xaxis.set_minor_locator(AutoMinorLocator(10))
     axs[1].yaxis.set_minor_locator(AutoMinorLocator(10))
     axs[1].grid(True,linewidth=0.25,alpha=0.25)
@@ -296,10 +322,52 @@ def plot_divergence(XX, PX, YY, PY, title=""):
     print(f"PX: min={min(PX)}, max={max(PX)}, mean={np.mean(PX)}")
     # plt.show()
 
-plot_divergence(particles.x, particles.px, particles.y, particles.py, title="Initial Distribution")
-plt.show()
 
-line.track(particles)
+# Track particles through each element and plot the divergence
+elements_names = [el for el in line.element_names]
+print(f"Elements in the line: {elements_names}")
 
-plot_divergence(particles.x, particles.px, particles.y, particles.py, title="After drift")
+# First, plot the initial distribution
+plot_divergence(particles.x, particles.px, particles.y, particles.py, title="Initial distribution")
+
+# Create a copy of the particles to track
+tracked_particles = particles.copy()
+# Initialize data structures to store particle coordinates
+particle_data_dict = {}  # Dictionary to store by element name
+particle_data_list = []  # List to store in order of tracking
+
+# Track through each element individually
+for i, element_name in enumerate(elements_names):
+    
+    print(f"Tracking through element {i}: {element_name}")
+    
+    # Track through this single element
+    line.track(tracked_particles, ele_start=element_name, num_elements=1)
+
+    # Get particle coordinates after tracking
+    p_table = tracked_particles.get_table()
+    
+    # Store coordinates in dictionary
+    particle_data_dict[element_name] = {
+        'x': p_table.x.copy(),
+        'px': p_table.px.copy(),
+        'y': p_table.y.copy(),
+        'py': p_table.py.copy(),
+        'zeta': p_table.zeta.copy() if hasattr(p_table, 'zeta') else None,
+        'delta': p_table.delta.copy() if hasattr(p_table, 'delta') else None
+    }
+    
+    particle_data = particle_data_dict[element_name].values()
+    particle_data_list.append(particle_data)
+    # Plot the divergence
+    plot_divergence(
+        p_table.x, p_table.px, 
+        p_table.y, p_table.py, 
+        title=f"After element {i}: {element_name}"
+    )
+
+# Print summary of stored data
+print(f"Data stored for {len(particle_data_dict)} elements in dictionary")
+print(f"Data stored for {len(particle_data_list)} elements in list")
+
 plt.show()

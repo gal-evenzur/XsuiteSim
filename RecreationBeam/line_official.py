@@ -93,7 +93,7 @@ env['qL'] = 1
 
 # We'll define the number of particles after loading the file
 # Use a default value for now and update after loading
-num_monitor_particles = 200000
+num_monitor_particles = 10000
 
 env.elements['m0'] = xt.ParticlesMonitor(num_particles=num_monitor_particles,
                                 start_at_turn=0, stop_at_turn=1,
