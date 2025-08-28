@@ -132,6 +132,7 @@ line = env.new_line(components=[
     env.new('d0.1', xt.Drift, length=1.3),
     env.new('q1', xt.Quadrupole, length='qL', k1s='kq_n'),
     env.new('d1.2', xt.Drift, length=1.3),
+    env.new('a_q2', xt.LimitRect, min_x=-0.2, max_x=0.2, min_y=-0.1, max_y=0.1),
     env.new('q2', xt.Quadrupole, length='qL', k1='kq_p'),
     env.new('d2.2', xt.Drift, length=1.2),
     env.new('dd', xt.Bend, length=0.5, k0='kd'),
@@ -327,47 +328,119 @@ def plot_divergence(XX, PX, YY, PY, title=""):
 elements_names = [el for el in line.element_names]
 print(f"Elements in the line: {elements_names}")
 
-# First, plot the initial distribution
-plot_divergence(particles.x, particles.px, particles.y, particles.py, title="Initial distribution")
-
 # Create a copy of the particles to track
 tracked_particles = particles.copy()
 # Initialize data structures to store particle coordinates
 particle_data_dict = {}  # Dictionary to store by element name
 particle_data_list = []  # List to store in order of tracking
 
+s_values = np.zeros((len(elements_names)+1, 1))
+x_values = np.zeros((len(elements_names)+1, len(particles.x)))
+y_values = np.zeros((len(elements_names)+1, len(particles.y)))
+
+# First, plot the initial distribution
+plot_divergence(particles.x, particles.px, particles.y, particles.py, title="Initial distribution")
+
+s_values[0] = 0.0
+x_values[0, :] = particles.x
+y_values[0, :] = particles.y
+particle_list = [tracked_particles.copy()]
+
 # Track through each element individually
 for i, element_name in enumerate(elements_names):
-    
-    print(f"Tracking through element {i}: {element_name}")
-    
+    s_start = tt.rows[element_name].s[0]
+    s_stop = tt.rows[i+1].s[0]
+    print(f"ELEMENT {i}: {element_name} || s={s_start:.3f}:{s_stop:.3f} m")
+
+    s_values[i+1] = s_stop
+
     # Track through this single element
     line.track(tracked_particles, ele_start=element_name, num_elements=1)
-
+    particle_list.append(tracked_particles.copy())
+    mask_alive = tracked_particles.state > 0
+    p_alive = tracked_particles.filter(mask_alive)
     # Get particle coordinates after tracking
-    p_table = tracked_particles.get_table()
     
-    # Store coordinates in dictionary
-    particle_data_dict[element_name] = {
-        'x': p_table.x.copy(),
-        'px': p_table.px.copy(),
-        'y': p_table.y.copy(),
-        'py': p_table.py.copy(),
-        'zeta': p_table.zeta.copy() if hasattr(p_table, 'zeta') else None,
-        'delta': p_table.delta.copy() if hasattr(p_table, 'delta') else None
-    }
+    # # Store coordinates in dictionary
+    # particle_data_dict[element_name] = {
+    #     'x': p_table.x.copy(),
+    #     'px': p_table.px.copy(),
+    #     'y': p_table.y.copy(),
+    #     'py': p_table.py.copy(),
+    #     'zeta': p_table.zeta.copy() if hasattr(p_table, 'zeta') else None,
+    #     'delta': p_table.delta.copy() if hasattr(p_table, 'delta') else None
+    # }
     
-    particle_data = particle_data_dict[element_name].values()
-    particle_data_list.append(particle_data)
+    # particle_data = particle_data_dict[element_name].values()
+    # particle_data_list.append(particle_data)
     # Plot the divergence
     plot_divergence(
-        p_table.x, p_table.px, 
-        p_table.y, p_table.py, 
+        p_alive.x, p_alive.px, 
+        p_alive.y, p_alive.py, 
         title=f"After element {i}: {element_name}"
     )
+    x_values[i+1, 0:len(p_alive.x)] = p_alive.x
+    y_values[i+1, 0:len(p_alive.y)] = p_alive.y
 
-# Print summary of stored data
-print(f"Data stored for {len(particle_data_dict)} elements in dictionary")
-print(f"Data stored for {len(particle_data_list)} elements in list")
+x_values = [p.x for p in particle_list]
+y_values = [p.y for p in particle_list]  # shape = (num_elements+1, num_particles)
+
+s_values = np.array(s_values)
+x_values = np.array(x_values)
+y_values = np.array(y_values)
+
+# Create a figure for particle trajectories
+plt.figure(figsize=(12, 8))
+
+# Select a subset of particles for better readability (max 100 particles)
+num_to_plot = min(100, particles.x.size)
+particle_indices = np.random.choice(particles.x.size, num_to_plot, replace=False)
+
+# First, determine at which step each particle was lost
+particle_lost_at = np.full(particles.x.size, len(s_values))  # Default: particle survives all elements
+for step in range(1, len(particle_list)):
+    prev_state = particle_list[step-1].state
+    curr_state = particle_list[step].state
+    lost_at_this_step = (prev_state > 0) & (curr_state <= 0)
+    # Update particle_lost_at for particles that got lost at this step
+    particle_lost_at[lost_at_this_step] = step
+
+# Get the final state to know which particles survived
+final_alive = particle_list[-1].state > 0
+
+# Plot trajectories with truncation at loss point
+for idx in particle_indices:
+    idx = int(idx)
+    loss_step = particle_lost_at[idx]
+    
+    if final_alive[idx]:
+        # If particle survived, use the original blue and red
+        plt.plot(s_values[:loss_step], x_values[:loss_step, idx], 'b-', alpha=0.3, linewidth=0.5)
+        plt.plot(s_values[:loss_step], y_values[:loss_step, idx], 'r-', alpha=0.3, linewidth=0.5)
+    else:
+        # If particle died, use purple for x and yellow for y
+        plt.plot(s_values[:loss_step], x_values[:loss_step, idx], 'purple', alpha=0.3, linewidth=0.5)
+        plt.plot(s_values[:loss_step], y_values[:loss_step, idx], 'yellow', alpha=0.3, linewidth=0.5)
+        # Mark the loss point with a dot
+        plt.plot(s_values[loss_step-1], x_values[loss_step-1, idx], 'ko', markersize=3, alpha=0.7)
+        plt.plot(s_values[loss_step-1], y_values[loss_step-1, idx], 'ko', markersize=3, alpha=0.7)
+
+# Plot mean trajectories
+mean_x = np.mean(x_values, axis=1)
+mean_y = np.mean(y_values, axis=1)
+plt.plot(s_values, mean_x, 'b-', linewidth=2, label='Mean x')
+plt.plot(s_values, mean_y, 'r-', linewidth=2, label='Mean y')
+
+# Add element positions
+for name, s_pos in zip(tt.name, tt.s):
+    if 'q' in name.lower() and not name.startswith('d'):
+        plt.axvline(x=s_pos, color='g', alpha=0.5, linestyle='--', label=name if 'q' in locals() else '_')
+        plt.text(s_pos, plt.ylim()[1]*0.9, name, rotation=90, verticalalignment='top')
+    elif 'dd' in name.lower():
+        plt.axvline(x=s_pos, color='m', alpha=0.5, linestyle='--', label=name if 'dd' in locals() else '_')
+        plt.text(s_pos, plt.ylim()[1]*0.9, name, rotation=90, verticalalignment='top')
+
+
+
 
 plt.show()
