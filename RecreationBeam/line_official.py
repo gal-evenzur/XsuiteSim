@@ -1,15 +1,10 @@
-from matplotlib.ticker import AutoMinorLocator
-import numpy as np
-import matplotlib.pyplot as plt
-from matplotlib.colors import LogNorm
-
-
 import xobjects as xo
 import xtrack as xt
 import xpart as xp
 
 import h5py
 import json
+from line_functions import *
 
 plt.close('all')
 
@@ -20,17 +15,11 @@ plt.rcParams['text.usetex'] = True
 
 ctx = xo.ContextCpu()  # Use xo.ContextCupy() for GPU
 
-# Physical constants
-c   = 299792458  # speed of light in m/s
-c2  = c*c
-e   = 1.602176634e-19  # elementary charge in C
-m_e = 9.1093837015e-31  # electron/positron mass in kg
-m_p = 1.67262192e-27 # proton/antiproton mass in kg
-
 
 u = {
     'c': 299792458,
     'c2': 299792458**2,
+    'e': 1.602176634e-19, # elementary charge in C
     'rest_e': xt.ELECTRON_MASS_EV,
     'rest_p': xt.PROTON_MASS_EV,
     'm_to_cm': 1e2,
@@ -47,88 +36,52 @@ u = {
     'um_to_m': 1e-6,
     'kG_to_T': 0.1,
     'GeV_to_kgms': 5.39e-19,
+    'eV_to_kgms': 5.34e-28,
     'GeV_to_kg': 1.8e-27,
     'GeV_to_kgm2s2': 1.6e-10,
 }
 
-def p_from_E(E, E_rest):
-    # m is in eV / c2
-    # E_rest = m * c2
-    print("E rest = ", E_rest)
-    # E is in eV
-    # p is in eV / c
-    pc = (E**2 - (E_rest)**2)**0.5
-    return pc / u['c']
 
-ref = {
+ref = { # All in natural units
     'q': 1,
-    'p': p_from_E(3e9, u['rest_e']),  # E = 3 GeV, p is in mks
+    'p': p_from_E(3e9, u['rest_e']),  # E = 3 GeV, p is in eV/c
     'betx_0': 1.0,
     'alfx_0': 0.0,
     'bety_0': 1.0,
     'alfy_0': 0.0,
-    'num_particles': 100  # This will be overridden by the actual number in the HDF5 file
 }
 
-
-def grad_kG_to_k(grad_kG):
-    grad_T = grad_kG * u['kG_to_T']
-    k = grad_T / ref['p']
-    return k
-
-def B_T_to_k(B_T):
-    k = B_T / ref['p']
-    return k
-
-print(ref['p'])
+print(f"ref['p'] = {ref['p']:.5e} eV/c")
 
 env = xt.Environment()
 
-env['kq_p'] = grad_kG_to_k(-6.66)
-env['kq_n'] = grad_kG_to_k(28.86)
-env['kd'] = B_T_to_k(0.219)
+env['kq_p'] = grad_kG_to_k(-6.66, ref['p'] * u['eV_to_kgms'], ref['q'] * u['e'])  # k in 1/m^2
+env['kq_n'] = grad_kG_to_k(28.86, ref['p'] * u['eV_to_kgms'], ref['q'] * u['e'])  # k in 1/m^2
+env['kd'] = B_T_to_k(0.219, ref['p'] * u['eV_to_kgms'], ref['q'] * u['e'])  # k in 1/m
 
 
 env['qL'] = 1
 
-# We'll define the number of particles after loading the file
-# Use a default value for now and update after loading
-num_monitor_particles = 10000
-
-env.elements['m0'] = xt.ParticlesMonitor(num_particles=num_monitor_particles,
-                                start_at_turn=0, stop_at_turn=1,
-                                auto_to_numpy=True)
-env.elements['m1'] = xt.ParticlesMonitor(num_particles=num_monitor_particles,
-                                start_at_turn=0, stop_at_turn=1,
-                                auto_to_numpy=True)
-env.elements['m2'] = xt.ParticlesMonitor(num_particles=num_monitor_particles,
-                                start_at_turn=0, stop_at_turn=1,
-                                auto_to_numpy=True)
-env.elements['md'] = xt.ParticlesMonitor(num_particles=num_monitor_particles,
-                                start_at_turn=0, stop_at_turn=1,
-                                auto_to_numpy=True)
 
 # Creating Line 
 line = env.new_line(components=[
     env.new('d0', xt.Drift, length=3.6),
-    env.place('m0'),
     env.new('q0', xt.Quadrupole, length='qL', k1='kq_p'),
     env.new('d0.1', xt.Drift, length=1.3),
-    env.place('m1'),
     env.new('q1', xt.Quadrupole, length='qL', k1s='kq_n'),
     env.new('d1.2', xt.Drift, length=1.3),
-    env.place('m2'),
+    env.new('a_q2', xt.LimitRect, min_x=-0.2, max_x=0.2, min_y=-0.1, max_y=0.1),
     env.new('q2', xt.Quadrupole, length='qL', k1='kq_p'),
     env.new('d2.2', xt.Drift, length=1.2),
-    env.place('md'),
     env.new('dd', xt.Bend, length=0.5, k0='kd'),
 ])
 
 
-line.particle_ref = xt.Particles(
-    p0c=ref['p'] * u['c'],  # in eV
+# Need to input in natural units
+line.particle_ref = xt.Particles( 
+    p0c=ref['p'],
     mass0=xt.ELECTRON_MASS_EV,
-    q0=1,
+    q0=ref['q'],
 )
 
 line.build_tracker()
@@ -247,153 +200,97 @@ def import_particles_from_hdf5(filename):
         
         return particles
 
-# Create particle object using either method
-# Uncomment one of the following options:
-
-# Option 1: Generate Gaussian beam as before
-# particles = xp.Particles(
-#     x=x,
-#     px=px / pz,  # Normalized to reference momentum
-#     y=y,
-#     py=py / pz,  # Normalized to reference momentum
-#     delta=(pz / ref['p'] - 1),  # (p - p0)/p0
-#     zeta=np.zeros(n_particles),  # Assuming all particles start at same longitudinal position
-#     _context=ctx,
-# )
-
-# Option 2: Import particles from HDF5 file
 particles = import_particles_from_hdf5('Data/secondary_particles.h5')
 pt = particles.get_table()
-print(pt)
 
-# Update the number of particles for the monitors
-num_monitor_particles = particles.x.size
-for monitor_name in ['m0', 'm1', 'm2', 'md']:
-    env.elements[monitor_name].num_particles = num_monitor_particles
-
-# Print the number of particles
-print(f"Number of particles: {env.elements['m0'].num_particles}")
 tt = line.get_table()
 print(tt)
 
+def track_line(line, particles, plot=True):
+    # Track particles through each element and plot the divergence
+    tt = line.get_table()
+    elements_names = [el for el in line.element_names]
+    print(f"Elements in the line: {elements_names}")
 
-def plot_divergence(XX, PX, YY, PY, title=""):
-    fig, axs = plt.subplots(1, 2, figsize=(10, 5), tight_layout=True)
-           
-    # hdivx = axs[0].hist2d(XX, PX, bins=(100,100), range=[[-6e-4,+6e-4],[-3e-3,+3e-3]], rasterized=True)
-    hdivx, _, _, im = axs[0].hist2d(XX, PX, bins=(100,100), rasterized=True, norm=LogNorm())
-    axs[0].set_xlabel(r'$x$ [m]')
-    axs[0].set_ylabel(r'$p_x$ [GeV]')
-    axs[0].xaxis.set_minor_locator(AutoMinorLocator(10))
-    axs[0].yaxis.set_minor_locator(AutoMinorLocator(10))
-    axs[0].grid(True,linewidth=0.25,alpha=0.25)
-    # Draw colorbar with subplot
-    fig.colorbar(im, ax=axs[0], label='Counts')
+    # Create a copy of the particles to track
+    tracked_particles = particles.copy()
+    # Initialize data structures to store particle coordinates
 
+    s_values = np.zeros((len(elements_names)+1, 1))
 
-    # hdivy = axs[1].hist2d(YY, PY, bins=(100,100), range=[[-6e-4,+6e-4],[-3e-3,+3e-3]], rasterized=True)
-    hdivy, _, _, im = axs[1].hist2d(XX, PX, bins=(100,100), rasterized=True)
-    axs[1].set_xlabel(r'$x$ [m]')
-    axs[1].set_ylabel(r'$p_x$ [GeV]')
-    axs[1].xaxis.set_minor_locator(AutoMinorLocator(10))
-    axs[1].yaxis.set_minor_locator(AutoMinorLocator(10))
-    axs[1].grid(True,linewidth=0.25,alpha=0.25)
-    fig.colorbar(im, ax=axs[1], label='Counts')
+    # First, plot the initial distribution
+    if plot:
+        plot_divergence(particles.x, particles.px, particles.y, particles.py, title="Initial distribution")
 
-    fig.suptitle(title, fontsize=16) # Add overall title
+    s_values[0] = 0.0
+    particle_list = [tracked_particles.copy()]
 
-    plt.tight_layout()
-    print(f"XX: min={min(XX)}, max={max(XX)}, mean={np.mean(XX)}")
-    print(f"PX: min={min(PX)}, max={max(PX)}, mean={np.mean(PX)}")
-    # plt.show()
+    # Track through each element individually
+    for i, element_name in enumerate(elements_names):
+        s_start = tt.rows[element_name].s[0]
+        s_stop = tt.rows[i+1].s[0]
+        print(f"ELEMENT {i}: {element_name} || s={s_start:.3f}:{s_stop:.3f} m")
 
-plot_divergence(particles.x, particles.px, particles.y, particles.py, title="Initial Distribution")
-plt.show()
+        s_values[i+1] = s_stop
 
-line.track(particles)
+        # Track through this single element
+        line.track(tracked_particles, ele_start=element_name, num_elements=1)
+        particle_list.append(tracked_particles.copy())
+        mask_alive = tracked_particles.state > 0
+        p_alive = tracked_particles.filter(mask_alive)
 
+        # Plot the divergence
+        plot_divergence(
+            p_alive.x, p_alive.px, 
+            p_alive.y, p_alive.py, 
+            title=f"After element {i}: {element_name}"
+        )
 
-def plot_monitors():
-    m = [env[f'm{i}'] for i in range(3)] + [env['md']]
+    return particle_list, s_values
 
-    # Create individual phase space plots for each monitor
-    
-    for i, mon in enumerate(m):
-        x, px = np.squeeze(mon.x), np.squeeze(mon.px)
-        y, py = np.squeeze(mon.y), np.squeeze(mon.py)
-        plot_divergence(x, px, y, py, title=f'Monitor m{i} at s = {np.squeeze(mon.s[0]):.2f} m')
+particle_list, s_values = track_line(line, particles, plot=True)
 
-        if i==2:
-            print("-----------------")
-            print(f"For monitor {i}:")
-            for xj, pxj in zip(x, px):
-                    print(f"x: {xj}, px: {pxj}")
-        # fig, axs = plt.subplots(1, 3, figsize=(15, 5))
-        # fig.suptitle(f'Monitor m{i} at s = {np.squeeze(mon.s[0]):.2f} m')
-        # print(f"shape: {mon.x.shape} || type: {type(mon.x)}")
+def plot_trajectories(particle_list, s_values, n_plot=100):
+    x_values = [p.x for p in particle_list]
+    y_values = [p.y for p in particle_list]  # shape = (num_elements+1, num_particles)
 
-        # # Turn mon.x to numpy and so with px
-        # x = np.squeeze(mon.x)
-        # px = np.squeeze(mon.px)
+    s_values = np.array(s_values)
+    x_values = np.array(x_values)
+    y_values = np.array(y_values)
 
-        # print(f"shape: {x.shape} || type: {type(x)}")
-
-
-        # H, _, _, im = axs[0].hist2d(x, px, bins=100, norm=LogNorm(), rasterized=True)
-
-        # axs[0].set_xlabel(r'$x$ [m]')
-        # axs[0].set_ylabel(r'$p_x$ [GeV]')
-        # axs[0].xaxis.set_minor_locator(AutoMinorLocator(10))
-        # axs[0].yaxis.set_minor_locator(AutoMinorLocator(10))
-        # axs[0].grid(True,linewidth=0.25,alpha=0.25)
-        # axs[0].set_title('x-px Phase Space')
-
-        # # add colorbar to subplot
-        # fig.colorbar(im, ax=axs[0], label='Counts')
-
-        # # y-py phase space
-        # axs[1].scatter(mon.y, mon.py, color='red')
-        # axs[1].set_xlabel('y [m]')
-        # axs[1].set_ylabel('py []')
-        # axs[1].set_title('y-py Phase Space')
-        # axs[1].grid(True)
-        
-        # # zeta-delta phase space
-        # axs[2].scatter(mon.zeta, mon.delta, color='green')
-        # axs[2].set_xlabel('zeta [m]')
-        # axs[2].set_ylabel('delta []')
-        # axs[2].set_title('zeta-delta Phase Space')
-        # axs[2].grid(True)
-        
-        # plt.tight_layout()
-        # print(f"Finished plotting monitor m{i}")
-
-    # Plot particle trajectory as s progresses
-
-    # Plot the particle trajectory at monitor points
-    s_values = np.squeeze([data.s for data in m])
-    s_values = s_values[:,0]
-    x_values = np.squeeze([data.x for data in m])
-    y_values = np.squeeze([data.y for data in m])
-    
     # Create a figure for particle trajectories
     plt.figure(figsize=(12, 8))
 
     # Select a subset of particles for better readability (max 100 particles)
-    num_to_plot = min(100, particles.x.size)
+    num_to_plot = min(n_plot, particles.x.size)
     particle_indices = np.random.choice(particles.x.size, num_to_plot, replace=False)
 
-    # Plot trajectories for each selected particle
-    print(s_values)
-    for i in particle_indices:
-        plt.plot(s_values, x_values[:,i], 'b-', alpha=0.3, linewidth=0.5)
-        # plt.plot(s_values, y_values[:,i], 'r-', alpha=0.3, linewidth=0.5)
+    particle_lost_at = particle_lost_at_step(particle_list)
+    # Get the final state to know which particles survived
+    final_alive = particle_list[-1].state > 0
 
-    # Plot mean trajectories #size = (4,)
+    # Plot trajectories with truncation at loss point
+    for idx in particle_indices:
+        idx = int(idx)
+        loss_step = particle_lost_at[idx]
+        
+        if final_alive[idx]:
+            # If particle survived, use the original blue and red
+            plt.plot(s_values[:loss_step], x_values[:loss_step, idx], 'b-', alpha=0.3, linewidth=0.5)
+            plt.plot(s_values[:loss_step], y_values[:loss_step, idx], 'r-', alpha=0.3, linewidth=0.5)
+        else:
+            # If particle died, use purple for x and yellow for y
+            plt.plot(s_values[:loss_step], x_values[:loss_step, idx], 'purple', alpha=0.3, linewidth=0.5)
+            plt.plot(s_values[:loss_step], y_values[:loss_step, idx], 'yellow', alpha=0.3, linewidth=0.5)
+            # Mark the loss point with a dot
+            plt.plot(s_values[loss_step-1], x_values[loss_step-1, idx], 'ko', markersize=3, alpha=0.7)
+            plt.plot(s_values[loss_step-1], y_values[loss_step-1, idx], 'ko', markersize=3, alpha=0.7)
+
+    # Plot mean trajectories
     mean_x = np.mean(x_values, axis=1)
     mean_y = np.mean(y_values, axis=1)
     plt.plot(s_values, mean_x, 'b-', linewidth=2, label='Mean x')
-    # plt.plot(s_values, mean_y, 'r-', linewidth=2, label='Mean y')
+    plt.plot(s_values, mean_y, 'r-', linewidth=2, label='Mean y')
 
     # Add element positions
     for name, s_pos in zip(tt.name, tt.s):
@@ -404,44 +301,8 @@ def plot_monitors():
             plt.axvline(x=s_pos, color='m', alpha=0.5, linestyle='--', label=name if 'dd' in locals() else '_')
             plt.text(s_pos, plt.ylim()[1]*0.9, name, rotation=90, verticalalignment='top')
 
-    plt.xlabel('s [m]')
-    plt.ylabel('Position [m]')
-    plt.title('Particle Trajectories (x in blue, y in red)')
-    plt.legend(loc='best')
-    plt.grid(True)
+
+plot_trajectories(particle_list, s_values)
 
 
-    plot_divergence(particles.x, particles.px, particles.y, particles.py, title="Last step")
-
-    # Plotting the last step
-    fig, axs = plt.subplots(1, 3, figsize=(15, 5))
-    fig.suptitle(f'Last Image, after dipole')
-
-    # x-px phase space
-    axs[0].scatter(particles.x, particles.px, color='blue')
-    axs[0].set_xlabel('x [m]')
-    axs[0].set_ylabel('px []')
-    axs[0].set_title('x-px Phase Space')
-    axs[0].grid(True)
-
-    # y-py phase space
-    axs[1].scatter(particles.y, particles.py, color='red')
-    axs[1].set_xlabel('y [m]')
-    axs[1].set_ylabel('py []')
-    axs[1].set_title('y-py Phase Space')
-    axs[1].grid(True)
-
-    # zeta-delta phase space
-    axs[2].scatter(particles.zeta, particles.delta, color='green')
-    axs[2].set_xlabel('zeta [m]')
-    axs[2].set_ylabel('delta []')
-    axs[2].set_title('zeta-delta Phase Space')
-    axs[2].grid(True)
-
-    plt.tight_layout()
-
-    print("Finished plotting first")
-
-print("Loading...")
-plot_monitors()
 plt.show()

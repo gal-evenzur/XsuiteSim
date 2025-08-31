@@ -2,3 +2,6 @@ tutorial_abp_demo/
 Data/
 *.h5
 *.gif
+*__pycache__
+Learning/xpart
+Learning/xtrack
