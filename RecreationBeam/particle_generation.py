@@ -490,21 +490,22 @@ plt.show()
 def save_particles_to_hdf5(states, filename):
     """
     Save particle 6D phase space coordinates (x, y, z, px, py, pz) to an HDF5 file
+
     
     Args:
         states: List of particle states [x, y, z, px, py, pz, mass, charge]
         filename: Output HDF5 filename
     """
     # Extract the 6D phase space coordinates
-    x_coords = np.array([state[0] for state in states])
-    y_coords = np.array([state[1] for state in states])
-    z_coords = np.array([state[2] for state in states])
-    px_coords = np.array([state[3] for state in states])
-    py_coords = np.array([state[4] for state in states])
-    pz_coords = np.array([state[5] for state in states])
-    mass = np.array([state[6] for state in states])
-    charge = np.array([state[7] for state in states])
-    
+    x_coords = np.array([state[0] for state in states]) # m
+    y_coords = np.array([state[1] for state in states]) # m
+    z_coords = np.array([state[2] for state in states]) # m
+    px_coords = np.array([state[3] for state in states]) # GeV/c
+    py_coords = np.array([state[4] for state in states]) # GeV/c
+    pz_coords = np.array([state[5] for state in states]) # GeV/c
+    mass = np.array([state[6] for state in states]) # GeV/c^2
+    charge = np.array([state[7] for state in states]) # e
+
     # Create HDF5 file
     with h5py.File(filename, 'w') as f:
         # Create dataset for each coordinate

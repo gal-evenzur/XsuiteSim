@@ -1,3 +1,4 @@
+# %% IMPORTS
 import xobjects as xo
 import xtrack as xt
 import xpart as xp
@@ -15,7 +16,7 @@ plt.rcParams['text.usetex'] = True
 
 ctx = xo.ContextCpu()  # Use xo.ContextCupy() for GPU
 
-
+# %% ENV AND LINE
 u = {
     'c': 299792458,
     'c2': 299792458**2,
@@ -35,6 +36,7 @@ u = {
     'um_to_cm': 1e-4,
     'um_to_m': 1e-6,
     'kG_to_T': 0.1,
+    'GeV_to_eV': 1e9,
     'GeV_to_kgms': 5.39e-19,
     'eV_to_kgms': 5.34e-28,
     'GeV_to_kg': 1.8e-27,
@@ -58,22 +60,62 @@ env = xt.Environment()
 env['kq_p'] = grad_kG_to_k(-6.66, ref['p'] * u['eV_to_kgms'], ref['q'] * u['e'])  # k in 1/m^2
 env['kq_n'] = grad_kG_to_k(28.86, ref['p'] * u['eV_to_kgms'], ref['q'] * u['e'])  # k in 1/m^2
 env['kd'] = B_T_to_k(0.219, ref['p'] * u['eV_to_kgms'], ref['q'] * u['e'])  # k in 1/m
+env['kd_corr'] = B_T_to_k(0.026107, ref['p'] * u['eV_to_kgms'], ref['q'] * u['e'])  # k in 1/m
 
 
-env['qL'] = 1
+sizes = { # min_x, max_x, min_y, max_y in m, start z, stop z, length in m
+    'd0': [3.6733336],
+    'q0': [-0.024610, 0.024610, -0.024610, 0.024610, (4.646664-3.6733336)],
+    'd0.1': [5.903336-4.646664],
+    'q1': [-0.024610, 0.024610, -0.024610, 0.024610, (6.876664-5.903336)],
+    'd1.2': [8.123336-6.876664],
+    'q2': [-0.024610, 0.024610, -0.024610, 0.024610, (9.096664-8.123336)],
+    'd2.corr': [10.1115-9.096664],
+    'corr': [-0.01795, 0.01795, -0.047, 0.047, 10.1115 - 9.87779],
+    'dcorr.d': [12.6034-10.1115],
+    'dd': [-0.022352, 0.02352, -0.063752, 0.031752, (13.5178-12.6034)],
+}
+
+sizes = { # min_x, max_x, min_y, max_y in m, start z, stop z, length in m
+    'd0': [3.6733336],
+    'q0': [-0.24610, 0.24610, -0.24610, 0.24610, (4.646664-3.6733336)],
+    'd0.1': [5.903336-4.646664],
+    'q1': [-0.24610, 0.24610, -0.24610, 0.24610, (6.876664-5.903336)],
+    'd1.2': [8.123336-6.876664],
+    'q2': [-0.24610, 0.24610, -0.24610, 0.24610, (9.096664-8.123336)],
+    'd2.corr': [10.1115-9.096664],
+    'corr': [-0.1795, 0.1795, -0.47, 0.47, 10.1115 - 9.87779],
+    'dcorr.d': [12.6034-10.1115],
+    'dd': [-0.22352, 0.2352, -0.63752, 0.31752, (13.5178-12.6034)],
+}
+
+
+env.new('a_q0', xt.LimitRect, min_x=sizes['q0'][0], max_x=sizes['q0'][1], min_y=sizes['q0'][2], max_y=sizes['q0'][3]),
+env.new('a_q1', xt.LimitRect, min_x=sizes['q1'][0], max_x=sizes['q1'][1], min_y=sizes['q1'][2], max_y=sizes['q1'][3]),
+env.new('a_q2', xt.LimitRect, min_x=sizes['q2'][0], max_x=sizes['q2'][1], min_y=sizes['q2'][2], max_y=sizes['q2'][3]),
+env.new('a_corr', xt.LimitRect, min_x=sizes['corr'][0], max_x=sizes['corr'][1], min_y=sizes['corr'][2], max_y=sizes['corr'][3]),
+env.new('a_dd', xt.LimitRect, min_x=sizes['dd'][0], max_x=sizes['dd'][1], min_y=sizes['dd'][2], max_y=sizes['dd'][3]),
+
 
 
 # Creating Line 
 line = env.new_line(components=[
-    env.new('d0', xt.Drift, length=3.6),
-    env.new('q0', xt.Quadrupole, length='qL', k1='kq_p'),
-    env.new('d0.1', xt.Drift, length=1.3),
-    env.new('q1', xt.Quadrupole, length='qL', k1s='kq_n'),
-    env.new('d1.2', xt.Drift, length=1.3),
-    env.new('a_q2', xt.LimitRect, min_x=-0.2, max_x=0.2, min_y=-0.1, max_y=0.1),
-    env.new('q2', xt.Quadrupole, length='qL', k1='kq_p'),
-    env.new('d2.2', xt.Drift, length=1.2),
-    env.new('dd', xt.Bend, length=0.5, k0='kd'),
+    env.new('d0', xt.Drift, length=sizes['d0'][0]),
+    env.place('a_q0'),
+    env.new('q0', xt.Quadrupole, length=sizes['q0'][-1], k1='kq_p'),
+    env.new('d0.1', xt.Drift, length=sizes['d0.1'][0]),
+    env.place('a_q1'),
+    env.new('q1', xt.Quadrupole, length=sizes['q1'][-1], k1s='kq_n'),
+    env.new('d1.2', xt.Drift, length=sizes['d1.2'][0]),
+    env.place('a_q2'),
+    env.new('q2', xt.Quadrupole, length=sizes['q2'][-1], k1='kq_p'),
+    env.new('d2.corr', xt.Drift, length=sizes['d2.corr'][0]),
+    env.place('a_corr'),
+    env.new('corr', xt.Bend, length=sizes['corr'][-1], k0='kd_corr'),
+    env.new('dcorr.d', xt.Drift, length=sizes['dcorr.d'][0]),
+    env.place('a_dd'),
+    env.new('dd', xt.Bend, length=sizes['dd'][-1], k0='kd'),
+    env.new('d_end', xt.Drift, length=1.0),
 ])
 
 
@@ -117,6 +159,10 @@ def plot_beam_size():
     beam_sizes.show()
 
 
+    fig0 = plt.figure(0, figsize=(6.4, 4.8))    
+    sv = line.survey()
+    sv.plot(fig0)
+
     # Plot
     fig1 = plt.figure(1, figsize=(6.4, 4.8*1.5))
     spbet = plt.subplot(3,1,1)
@@ -156,8 +202,11 @@ def plot_beam_size():
     fig1.subplots_adjust(left=.15, right=.92, hspace=.27)
     plt.show()
 
+
+# %% 
+
 # Function to import particles from HDF5 file
-def import_particles_from_hdf5(filename):
+def import_particles_from_hdf5(filename, p0c):
     """
     Import particles from an HDF5 file created by particle_generation.py
     
@@ -170,13 +219,25 @@ def import_particles_from_hdf5(filename):
     print(f"Loading particles from {filename}")
     with h5py.File(filename, 'r') as f:
         # Extract the 6D phase space coordinates
-        x_coords = f['x'][:]
-        y_coords = f['y'][:]
-        z_coords = f['z'][:]
-        px_coords = f['px'][:]
-        py_coords = f['py'][:]
-        pz_coords = f['pz'][:]
+        x_coords = f['x'][:] # [m]
+        y_coords = f['y'][:] # [m]
+        z_coords = f['z'][:] # [m]
+        px_coords = f['px'][:] # [GeV/c]
+        py_coords = f['py'][:] # [GeV/c]
+        pz_coords = f['pz'][:] # [GeV/c]
+
+        px_eV = px_coords * u['GeV_to_eV']
+        py_eV = py_coords * u['GeV_to_eV']
+        pz_eV = pz_coords * u['GeV_to_eV']
+
+        p = np.sqrt(px_eV**2 + py_eV**2 + pz_eV**2)
+
+        px = px_eV / p0c # dimensionless
+        py = py_eV / p0c # dimensionless
+
+        delta = (p - p0c) / p0c  # dimensionless
         
+
         # Get number of particles
         num_particles = f.attrs['num_particles']
         print(f"Loaded {num_particles} particles")
@@ -185,22 +246,24 @@ def import_particles_from_hdf5(filename):
         print(f"x range: [{np.min(x_coords):.6f}, {np.max(x_coords):.6f}] m")
         print(f"y range: [{np.min(y_coords):.6f}, {np.max(y_coords):.6f}] m")
         print(f"z range: [{np.min(z_coords):.6f}, {np.max(z_coords):.6f}] m")
-        print(f"px range: [{np.min(px_coords):.6f}, {np.max(px_coords):.6f}] GeV")
-        print(f"py range: [{np.min(py_coords):.6f}, {np.max(py_coords):.6f}] GeV")
-        print(f"pz range: [{np.min(pz_coords):.6f}, {np.max(pz_coords):.6f}] GeV")
-        
+        print(f"px range: [{np.min(px):.6f}, {np.max(px):.6f}]")
+        print(f"py range: [{np.min(py):.6f}, {np.max(py):.6f}]")
+        print(f"delta range: [{np.min(delta):.6f}, {np.max(delta):.6f}]")
+
         # Create the particle object for tracking
         particles = xp.Particles(
             x=x_coords,
-            px=px_coords,
+            px=px,
             y=y_coords,
-            py=py_coords,
+            py=py,
+            zeta=z_coords,
+            delta=delta,  # delta = (pz [eV/c] - p0 [eV/c]) / p0
             _context=ctx,
         )
         
         return particles
 
-particles = import_particles_from_hdf5('Data/secondary_particles.h5')
+particles = import_particles_from_hdf5('Data/secondary_particles.h5', ref['p'])
 pt = particles.get_table()
 
 tt = line.get_table()
