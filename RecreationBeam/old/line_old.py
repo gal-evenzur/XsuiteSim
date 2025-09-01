@@ -82,7 +82,7 @@ m_p = 1.67262192e-27 # proton/antiproton mass in kg
 ######### configurations #########
 ##################################
 fx0     = +0*um_to_m ### TODO??? ### this is where the beam is shot from
-fy0     = -1000*um_to_m ### TODO??? ### this is where the beam is shot from
+fy0     = 0*um_to_m ### TODO??? ### this is where the beam is shot from
 fz0     = -200*cm_to_m ### fixed, just has to be before the Be window ### this is where the beam is shot from
 fsigmax = 50*um_to_m ## beam sigma
 fsigmay = 50*um_to_m ## beam sigma

@@ -42,7 +42,7 @@ m_p = 1.67262192e-27 # proton/antiproton mass in kg
 ########################################################################
 def GenerateGaussianBeam(E_GeV,mass_GeV,charge,mks=False):
     ### These variables assumed to be class members
-    fx0         = -5*mm_to_m ### TODO???
+    fx0         = 0*mm_to_m ### TODO???
     fy0         = 0 ### TODO???
     fz0         = -200*cm_to_m
     fbeamfocus  = 0
@@ -392,7 +392,7 @@ def plot_2h(states1,states2):
 
 
 states = []
-n_particles = 10000
+n_particles = 50000
 for i in range(n_particles):
     ### particle species
     MM = m_e ## kg, positron
