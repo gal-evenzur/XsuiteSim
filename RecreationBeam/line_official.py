@@ -7,11 +7,8 @@ import h5py
 import json
 from line_functions import *
 
-plt.close('all')
-
 plt.rcParams['image.cmap'] = 'afmhot'
 # plt.rcParams['image.cmap'] = 'copper'
-plt.rcParams['text.usetex'] = True
 
 
 ctx = xo.ContextCpu()  # Use xo.ContextCupy() for GPU
@@ -64,58 +61,58 @@ env['kd_corr'] = B_T_to_k(0.026107, ref['p'] * u['eV_to_kgms'], ref['q'] * u['e'
 
 
 sizes = { # min_x, max_x, min_y, max_y in m, start z, stop z, length in m
-    'd0': [3.6733336],
+    'dr0': [3.6733336],
     'q0': [-0.024610, 0.024610, -0.024610, 0.024610, (4.646664-3.6733336)],
-    'd0.1': [5.903336-4.646664],
+    'dr0.1': [5.903336-4.646664],
     'q1': [-0.024610, 0.024610, -0.024610, 0.024610, (6.876664-5.903336)],
-    'd1.2': [8.123336-6.876664],
+    'dr1.2': [8.123336-6.876664],
     'q2': [-0.024610, 0.024610, -0.024610, 0.024610, (9.096664-8.123336)],
-    'd2.corr': [10.1115-9.096664],
+    'dr2.corr': [10.1115-9.096664],
     'corr': [-0.01795, 0.01795, -0.047, 0.047, 10.1115 - 9.87779],
-    'dcorr.d': [12.6034-10.1115],
+    'drcorr.d': [12.6034-10.1115],
     'dd': [-0.022352, 0.02352, -0.063752, 0.031752, (13.5178-12.6034)],
 }
 
-sizes = { # min_x, max_x, min_y, max_y in m, start z, stop z, length in m
-    'd0': [3.6733336],
-    'q0': [-0.24610, 0.24610, -0.24610, 0.24610, (4.646664-3.6733336)],
-    'd0.1': [5.903336-4.646664],
-    'q1': [-0.24610, 0.24610, -0.24610, 0.24610, (6.876664-5.903336)],
-    'd1.2': [8.123336-6.876664],
-    'q2': [-0.24610, 0.24610, -0.24610, 0.24610, (9.096664-8.123336)],
-    'd2.corr': [10.1115-9.096664],
-    'corr': [-0.1795, 0.1795, -0.47, 0.47, 10.1115 - 9.87779],
-    'dcorr.d': [12.6034-10.1115],
-    'dd': [-0.22352, 0.2352, -0.63752, 0.31752, (13.5178-12.6034)],
-}
+# sizes = { # min_x, max_x, min_y, max_y in m, start z, stop z, length in m
+#     'dr0': [3.6733336],
+#     'q0': [-0.24610, 0.24610, -0.24610, 0.24610, (4.646664-3.6733336)],
+#     'dr0.1': [5.903336-4.646664],
+#     'q1': [-0.24610, 0.24610, -0.24610, 0.24610, (6.876664-5.903336)],
+#     'dr1.2': [8.123336-6.876664],
+#     'q2': [-0.24610, 0.24610, -0.24610, 0.24610, (9.096664-8.123336)],
+#     'dr2.corr': [10.1115-9.096664],
+#     'corr': [-0.1795, 0.1795, -0.47, 0.47, 10.1115 - 9.87779],
+#     'drcorr.d': [12.6034-10.1115],
+#     'dd': [-0.22352, 0.2352, -0.63752, 0.31752, (13.5178-12.6034)],
+# }
 
 
 env.new('a_q0', xt.LimitRect, min_x=sizes['q0'][0], max_x=sizes['q0'][1], min_y=sizes['q0'][2], max_y=sizes['q0'][3]),
 env.new('a_q1', xt.LimitRect, min_x=sizes['q1'][0], max_x=sizes['q1'][1], min_y=sizes['q1'][2], max_y=sizes['q1'][3]),
 env.new('a_q2', xt.LimitRect, min_x=sizes['q2'][0], max_x=sizes['q2'][1], min_y=sizes['q2'][2], max_y=sizes['q2'][3]),
-env.new('a_corr', xt.LimitRect, min_x=sizes['corr'][0], max_x=sizes['corr'][1], min_y=sizes['corr'][2], max_y=sizes['corr'][3]),
+env.new('a_dd_corr', xt.LimitRect, min_x=sizes['corr'][0], max_x=sizes['corr'][1], min_y=sizes['corr'][2], max_y=sizes['corr'][3]),
 env.new('a_dd', xt.LimitRect, min_x=sizes['dd'][0], max_x=sizes['dd'][1], min_y=sizes['dd'][2], max_y=sizes['dd'][3]),
 
 
 
 # Creating Line 
 line = env.new_line(components=[
-    env.new('d0', xt.Drift, length=sizes['d0'][0]),
+    env.new('dr0', xt.Drift, length=sizes['dr0'][0]),
     env.place('a_q0'),
     env.new('q0', xt.Quadrupole, length=sizes['q0'][-1], k1='kq_p'),
-    env.new('d0.1', xt.Drift, length=sizes['d0.1'][0]),
+    env.new('dr0.1', xt.Drift, length=sizes['dr0.1'][0]),
     env.place('a_q1'),
     env.new('q1', xt.Quadrupole, length=sizes['q1'][-1], k1s='kq_n'),
-    env.new('d1.2', xt.Drift, length=sizes['d1.2'][0]),
+    env.new('dr1.2', xt.Drift, length=sizes['dr1.2'][0]),
     env.place('a_q2'),
     env.new('q2', xt.Quadrupole, length=sizes['q2'][-1], k1='kq_p'),
-    env.new('d2.corr', xt.Drift, length=sizes['d2.corr'][0]),
-    env.place('a_corr'),
-    env.new('corr', xt.Bend, length=sizes['corr'][-1], k0='kd_corr'),
-    env.new('dcorr.d', xt.Drift, length=sizes['dcorr.d'][0]),
+    env.new('dr2.corr', xt.Drift, length=sizes['dr2.corr'][0]),
+    env.place('a_dd_corr'),
+    env.new('dd_corr', xt.Bend, length=sizes['corr'][-1], k0='kd_corr'),
+    env.new('drcorr.d', xt.Drift, length=sizes['drcorr.d'][0]),
     env.place('a_dd'),
     env.new('dd', xt.Bend, length=sizes['dd'][-1], k0='kd'),
-    env.new('d_end', xt.Drift, length=1.0),
+    env.new('dr_end', xt.Drift, length=1.0),
 ])
 
 
@@ -285,7 +282,6 @@ def track_line(line, particles, plot=True):
     if plot:
         plot_divergence(particles.x, particles.px, particles.y, particles.py, title="Initial distribution")
 
-    s_values[0] = 0.0
     particle_list = [tracked_particles.copy()]
 
     # Track through each element individually
@@ -299,19 +295,120 @@ def track_line(line, particles, plot=True):
         # Track through this single element
         line.track(tracked_particles, ele_start=element_name, num_elements=1)
         particle_list.append(tracked_particles.copy())
-        mask_alive = tracked_particles.state > 0
-        p_alive = tracked_particles.filter(mask_alive)
 
-        # Plot the divergence
-        plot_divergence(
-            p_alive.x, p_alive.px, 
-            p_alive.y, p_alive.py, 
-            title=f"After element {i}: {element_name}"
-        )
 
     return particle_list, s_values
 
 particle_list, s_values = track_line(line, particles, plot=True)
+print("Tracked line.")
+
+
+def phase_plot_line(line, particle_list):
+    """
+    Generate phase plane plots for each drift section in the beam line.
+    
+    For each drift (except the last one), create a figure with 6 subplots:
+    - Phase plane histogram for the drift itself (x-px and y-py)
+    - Phase plane histogram for the adjacent aperture (x-px and y-py)
+    - Phase plane histogram for the adjacent magnet (x-px and y-py)
+    
+    For the last drift, create a figure with just 2 subplots showing its phase plane histogram.
+    """
+    # Get all element names in the line
+    element_names = line.element_names
+    
+    # Identify all drifts in the line
+    drift_elements = [name for name in element_names if name.startswith('dr')]
+    print("...Plotting phase planes...")
+    
+    alive_particles = []
+    for p in particle_list:
+        alive_particles.append(p.filter(p.state > 0))
+        print(len(alive_particles[-1].x), end=' ')
+
+    print()
+
+    
+    # Iterate through each drift except the last one
+    for i, drift_name in enumerate(drift_elements[:-1]):
+        # Find the drift index in the element_names list
+        drift_idx = element_names.index(drift_name)
+        
+        # Get adjacent elements: aperture and magnet
+        # Typically drift -> aperture -> magnet pattern
+        aperture_idx = drift_idx + 1
+        magnet_idx = drift_idx + 2
+        
+        # Make sure indices are valid
+        if magnet_idx >= len(element_names):
+            continue
+            
+        drift_particles = alive_particles[drift_idx]
+        aperture_particles = alive_particles[aperture_idx]
+        magnet_particles = alive_particles[magnet_idx]
+        
+        # Create a figure with 6 subplots: 2 rows (x and y) and 3 columns (drift, aperture, magnet)
+        fig, axs = plt.subplots(2, 3, figsize=(12, 8))
+        fig.suptitle(f"Phase Plane Histograms for {drift_name} and Adjacent Elements", fontsize=16)
+        
+        # Column titles
+        col_titles = [drift_name, element_names[aperture_idx], element_names[magnet_idx]]
+        for j, title in enumerate(col_titles):
+            axs[0, j].set_title(title)
+        
+        # Row labels
+        axs[0, 0].set_ylabel("p_x / p_0")
+        axs[1, 0].set_ylabel("p_y / p_0")
+
+        # X-PX histograms (top row)
+        for j, particles in enumerate([drift_particles, aperture_particles, magnet_particles]):
+            h, _, _, im = axs[0, j].hist2d(particles.x, particles.px, bins=(100, 100), rasterized=True)
+            axs[0, j].set_xlabel('$x$ [m]')
+            axs[0, j].grid(True, linewidth=0.25, alpha=0.25)
+            fig.colorbar(im, ax=axs[0, j])
+        
+        # Y-PY histograms (bottom row)
+        for j, particles in enumerate([drift_particles, aperture_particles, magnet_particles]):
+            h, _, _, im = axs[1, j].hist2d(particles.y, particles.py, bins=(100, 100), rasterized=True)
+            axs[1, j].set_xlabel('$y$ [m]')
+            axs[1, j].grid(True, linewidth=0.25, alpha=0.25)
+            fig.colorbar(im, ax=axs[1, j])
+        
+        plt.subplots_adjust(top=0.9)
+
+
+        print(f"Finished {drift_name}")
+
+    print("Plotting last element..")
+    # Special handling for the last drift
+    last_drift = drift_elements[-1]
+    last_drift_idx = element_names.index(last_drift)
+    last_drift_particles = alive_particles[last_drift_idx]
+    
+    # Create a figure with 2 subplots just for the last drift
+    fig, axs = plt.subplots(1, 2, figsize=(12, 5))
+    fig.suptitle(f"Phase Plane Histograms for {last_drift}", fontsize=16)
+    
+    # X-PX histogram
+    h, _, _, im = axs[0].hist2d(last_drift_particles.x, last_drift_particles.px, bins=(100, 100), rasterized=True)
+    axs[0].set_xlabel('$x$ [m]')
+    axs[0].set_ylabel('p_x/p_0')
+    axs[0].grid(True, linewidth=0.25, alpha=0.25)
+    fig.colorbar(im, ax=axs[0], label='Counts')
+    
+    # Y-PY histogram
+    h, _, _, im = axs[1].hist2d(last_drift_particles.y, last_drift_particles.py, bins=(100, 100), rasterized=True)
+    axs[1].set_xlabel('$y$ [m]')
+    axs[1].set_ylabel('p_y/p_0')
+    axs[1].grid(True, linewidth=0.25, alpha=0.25)
+    fig.colorbar(im, ax=axs[1], label='Counts')
+    
+
+phase_plot_line(line, particle_list)
+print("Finished plotting phase planes.")
+plt.show()
+
+print("Plotted phase planes.")
 
 def plot_trajectories(particle_list, s_values, n_plot=100):
     x_values = [p.x for p in particle_list]
@@ -322,7 +419,7 @@ def plot_trajectories(particle_list, s_values, n_plot=100):
     y_values = np.array(y_values)
 
     # Create a figure for particle trajectories
-    plt.figure(figsize=(12, 8))
+    fig, ax = plt.subplots(figsize=(12, 8))
 
     # Select a subset of particles for better readability (max 100 particles)
     num_to_plot = min(n_plot, particles.x.size)
@@ -336,36 +433,47 @@ def plot_trajectories(particle_list, s_values, n_plot=100):
     for idx in particle_indices:
         idx = int(idx)
         loss_step = particle_lost_at[idx]
-        
+        loss_step = int(loss_step)
+
         if final_alive[idx]:
             # If particle survived, use the original blue and red
-            plt.plot(s_values[:loss_step], x_values[:loss_step, idx], 'b-', alpha=0.3, linewidth=0.5)
-            plt.plot(s_values[:loss_step], y_values[:loss_step, idx], 'r-', alpha=0.3, linewidth=0.5)
+            ax.plot(s_values, x_values[:, idx], 'b-', alpha=0.3, linewidth=0.5)
+            ax.plot(s_values, y_values[:, idx], 'r-', alpha=0.3, linewidth=0.5)
         else:
             # If particle died, use purple for x and yellow for y
-            plt.plot(s_values[:loss_step], x_values[:loss_step, idx], 'purple', alpha=0.3, linewidth=0.5)
-            plt.plot(s_values[:loss_step], y_values[:loss_step, idx], 'yellow', alpha=0.3, linewidth=0.5)
-            # Mark the loss point with a dot
-            plt.plot(s_values[loss_step-1], x_values[loss_step-1, idx], 'ko', markersize=3, alpha=0.7)
-            plt.plot(s_values[loss_step-1], y_values[loss_step-1, idx], 'ko', markersize=3, alpha=0.7)
+            ax.plot(s_values[:loss_step], x_values[:loss_step, idx], 'purple', alpha=0.3, linewidth=0.5)
+            ax.plot(s_values[:loss_step], y_values[:loss_step, idx], 'yellow', alpha=0.3, linewidth=0.5)
+            # Mark the loss point with a scatter point
+            ax.scatter(s_values[loss_step-1], x_values[loss_step-1, idx], color='k', s=9, alpha=0.7)
+            ax.scatter(s_values[loss_step-1], y_values[loss_step-1, idx], color='k', s=9, alpha=0.7)
 
-    # Plot mean trajectories
-    mean_x = np.mean(x_values, axis=1)
-    mean_y = np.mean(y_values, axis=1)
-    plt.plot(s_values, mean_x, 'b-', linewidth=2, label='Mean x')
-    plt.plot(s_values, mean_y, 'r-', linewidth=2, label='Mean y')
+    alive_particles = []
+    for p in particle_list:
+        alive_particles.append(p.filter(final_alive))
+        print(len(alive_particles[-1].x), end=' ')
 
+    x_alive = [p.x for p in alive_particles]
+    y_alive = [p.y for p in alive_particles]  # shape = (num_elements+1, num_particles_alive)
+    x_alive = np.array(x_alive)
+    y_alive = np.array(y_alive)
+
+    mean_x = np.mean(x_alive, axis=1)
+    mean_y = np.mean(y_alive, axis=1)
+    ax.plot(s_values, mean_x, 'b-', linewidth=2, label='Mean x')
+    ax.plot(s_values, mean_y, 'r-', linewidth=2, label='Mean y')
+    ax.legend()
     # Add element positions
     for name, s_pos in zip(tt.name, tt.s):
-        if 'q' in name.lower() and not name.startswith('d'):
-            plt.axvline(x=s_pos, color='g', alpha=0.5, linestyle='--', label=name if 'q' in locals() else '_')
-            plt.text(s_pos, plt.ylim()[1]*0.9, name, rotation=90, verticalalignment='top')
-        elif 'dd' in name.lower():
-            plt.axvline(x=s_pos, color='m', alpha=0.5, linestyle='--', label=name if 'dd' in locals() else '_')
-            plt.text(s_pos, plt.ylim()[1]*0.9, name, rotation=90, verticalalignment='top')
+        if 'a_q' in name.lower() and not name.startswith('d'):
+            ax.axvline(x=s_pos, color='g', alpha=0.5, linestyle='--', label=name if 'q' in locals() else '_')
+            ax.text(s_pos, ax.get_ylim()[1]*0.9, name, rotation=90, verticalalignment='top')
+        elif 'a_dd' in name.lower():
+            ax.axvline(x=s_pos, color='m', alpha=0.5, linestyle='--', label=name if 'dd' in locals() else '_')
+            ax.text(s_pos, ax.get_ylim()[1]*0.9, name, rotation=90, verticalalignment='top')
 
 
-plot_trajectories(particle_list, s_values)
+
+plot_trajectories(particle_list, s_values, n_plot=10)
 
 
 plt.show()
