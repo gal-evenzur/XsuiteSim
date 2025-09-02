@@ -2,7 +2,97 @@ from matplotlib.ticker import AutoMinorLocator
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.colors import LogNorm
+import xtrack as xt
+plt.rcParams['image.cmap'] = 'afmhot'
 
+n_particles = 50000
+MagnetSettings = 502
+
+# %% CONSTS________
+u = {
+    'c': 299792458,
+    'c2': 299792458**2,
+    'e': 1.602176634e-19, # elementary charge in C
+    'rest_e': xt.ELECTRON_MASS_EV,
+    'rest_p': xt.PROTON_MASS_EV,
+    'm_to_cm': 1e2,
+    'm_to_mm': 1e3,
+    'm_to_um': 1e6,
+    'cm_to_mm': 1e1,
+    'cm_to_um': 1e4,
+    'cm_to_m': 1e-2,
+    'mm_to_m': 1e-3,
+    'mm_to_cm': 1e-1,
+    'mm_to_um': 1e3,
+    'um_to_mm': 1e-3,
+    'um_to_cm': 1e-4,
+    'um_to_m': 1e-6,
+    'kG_to_T': 0.1,
+    'GeV_to_eV': 1e9,
+    'GeV_to_kgms': 5.39e-19,
+    'eV_to_kgms': 5.34e-28,
+    'GeV_to_kg': 1.8e-27,
+    'GeV_to_kgm2s2': 1.6e-10,
+    'fig_size': (13, 8)
+}
+
+
+
+### magnets
+magsetvals = {502:[-7.637,28.55,-7.637], 490.0:[-30.68,46.42,-30.68], 490.1:[-27.99,44.98,-27.99], 490.2:[-20.38,40.42,-20.38], 490.3:[-11.56,30.05,-11.56], 490.4:[-3.37,26.72,-3.37], 490.5:[-6.66,28.86,-6.66] }
+magsetdelt = {"quad0":[0,0], "quad1":[0,0], "quad2":[0,0], "xcorr":[0,0], "dipole":[0,0]} ### cm
+Grad1 = magsetvals[MagnetSettings][0]
+Grad2 = magsetvals[MagnetSettings][1]
+
+B_dd_xcorr = 0.026107 # Bx 
+B_dd = 0.219 # By
+
+# %% +++++++++Monitor sizes 
+npix_x = 1024
+npix_y = 512
+pix_x  = 0.02924
+pix_y  = 0.02688
+chipXmm = npix_x*pix_x
+chipYmm = npix_y*pix_y
+chipXcm = chipXmm*u['mm_to_cm']
+chipYcm = chipYmm*u['mm_to_cm']
+chipXm  = chipXmm*u['mm_to_m']
+chipYm  = chipYmm*u['mm_to_m']
+dy_det  = +0.35 # cm
+
+# Define detector x range
+detector_x_center_cm = 0 # cm
+# detector_x_center_cm = 0. # cm
+detector_x_center_m = detector_x_center_cm*u['cm_to_m']
+
+# Define detector y range
+detector_y_center_cm = 5.165 + 0.1525 + 3.685 + dy_det # cm
+detector_y_center_m  = detector_y_center_cm*u['cm_to_m']
+
+# Calculate detector z position
+detector_z_base_cm = 1363 + 303.2155 + 11.43 + 1.05  # cm
+detector_z_base_m  = detector_z_base_cm*u['cm_to_m']
+detector_z_base_mm = detector_z_base_cm*u['cm_to_mm']
+
+
+sizes = { # min_x, max_x, min_y, max_y in m, start z, stop z, length in m
+    'dr0': [3.6733336],
+    'q0': [-0.024610, 0.024610, -0.024610, 0.024610, 4.646664-3.6733336],
+    'dr0.1': [5.903336-4.646664],
+    'q1': [-0.024610, 0.024610, -0.024610, 0.024610, 6.876664-5.903336],
+    'dr1.2': [8.123336-6.876664],
+    'q2': [-0.024610, 0.024610, -0.024610, 0.024610, 9.096664-8.123336],
+    'dr2.corr': [10.1115-9.096664],
+    'corr': [-0.1795, 0.1795, -0.047, 0.047, 10.1115 - 9.87779],
+    'drcorr.d': [12.6034-10.1115],
+    'dd': [-0.022352, 0.02352, -0.063752, 0.031752, 13.5178-12.6034],
+    'm0': [detector_x_center_m-chipYm/2., detector_x_center_m+chipYm/2.,
+           detector_y_center_m-chipXm/2.,detector_y_center_m+chipXm/2.,
+           detector_z_base_m]
+}
+
+
+# %% (--) _FUNCTIONS_ (--)
 
 def p_from_E(E, E_rest):
     # m is in eV / c2
@@ -24,7 +114,14 @@ def B_T_to_k(B_T, p_mks, q_mks):
     k = q_mks * B_T / p_mks  # k in 1/m
     return k
 
-
+def plot_histogram(x, y, bins, title=""):
+    fig, ax = plt.subplots(figsize=(8, 6))
+    ax.hist2d(x, y, bins=bins, cmap='inferno', norm=LogNorm())
+    ax.set_xlabel(r'$x$ [m]')
+    ax.set_ylabel(r'$y$ [m]')
+    ax.set_title(title)
+    plt.colorbar(label='Counts')
+    plt.show()
 
 def plot_divergence(XX, PX, YY, PY, title=""):
     fig, axs = plt.subplots(1, 2, figsize=(10, 5), tight_layout=True)

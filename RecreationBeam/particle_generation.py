@@ -4,13 +4,24 @@ from matplotlib.ticker import AutoMinorLocator
 
 from matplotlib.animation import FuncAnimation, PillowWriter
 import h5py
-
+from line_functions import n_particles
 dogif = False
 
 plt.rcParams['image.cmap'] = 'afmhot'
 # plt.rcParams['image.cmap'] = 'copper'
 plt.rcParams['text.usetex'] = True
 
+Nparticles = 1000
+MagnetsSettings = 502
+mltprc = True
+doshw  = True
+dogif = False
+fullacc = False
+
+
+plt.rcParams['image.cmap'] = 'afmhot'
+# plt.rcParams['image.cmap'] = 'copper'
+plt.rcParams['text.usetex'] = True
 
 # Convert units
 m_to_cm  = 1e2
@@ -36,6 +47,40 @@ c2  = c*c
 e   = 1.602176634e-19  # elementary charge in C
 m_e = 9.1093837015e-31  # electron/positron mass in kg
 m_p = 1.67262192e-27 # proton/antiproton mass in kg
+
+
+##################################
+######### configurations #########
+##################################
+fx0     = +0*um_to_m ### TODO??? ### this is where the beam is shot from
+fy0     = 0*um_to_m ### TODO??? ### this is where the beam is shot from
+fz0     = -200*cm_to_m ### fixed, just has to be before the Be window ### this is where the beam is shot from
+fsigmax = 50*um_to_m ## beam sigma
+fsigmay = 50*um_to_m ## beam sigma
+fsigmaz = 150*um_to_m ## beam sigma
+dy_det  = +0.35 # cm
+zAL     = +30 ### the aluminum foil, cm
+zBe     = -84 ### the beryllium window, cm
+Z0      = zBe if(MagnetsSettings==502) else zAL
+Z0_m    = Z0*cm_to_m
+MM      = m_e ## kg, positron
+QQ      = +1  ## unit charge, positron
+mGeV    = (MM*c2)/GeV_to_kgm2s2 ## GeV
+E_GeV   = 10 # GeV, energy of primary partticles
+Emin    = 1 ## GeV
+Emax    = 6 ## GeV
+smearT  = True
+smearP  = True
+smear_sigma_T_um  = 0.3 ## um
+smear_sigma_P_GeV = 1.5e-3 ## GeV
+ZMAX    = 18 ## METERES
+tmax    = ZMAX / (0.99 * c) ### time range for propagation (seconds): approximate time to travel 18 meters (last detector is at ~18 meters, relativistic particles going ~c)
+t_span  = (0, tmax)
+max_dt  = 1e-9
+##################################
+##################################
+##################################
+
 
 
 ########################################################################
@@ -392,7 +437,6 @@ def plot_2h(states1,states2):
 
 
 states = []
-n_particles = 50000
 for i in range(n_particles):
     ### particle species
     MM = m_e ## kg, positron
