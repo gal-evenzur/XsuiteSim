@@ -81,25 +81,30 @@ env.new('a_q2', xt.LimitRect, min_x=sizes['q2'][0], max_x=sizes['q2'][1], min_y=
 env.new('a_dd_corr', xt.LimitRect, min_x=sizes['corr'][0], max_x=sizes['corr'][1], min_y=sizes['corr'][2], max_y=sizes['corr'][3]),
 env.new('a_dd', xt.LimitRect, min_x=sizes['dd'][0], max_x=sizes['dd'][1], min_y=sizes['dd'][2], max_y=sizes['dd'][3]),
 
-
+env.new('beampipe', xt.LimitEllipse, a=0.02, b=0.02) #beampipe of 2 cm
 
 # Creating Line 
 line = env.new_line(components=[
     env.new('dr0', xt.Drift, length=sizes['dr0'][0]),
-    env.place('a_q0'),
+    env.place('beampipe'),
     env.new('q0', xt.Quadrupole, length=sizes['q0'][-1], k1='kq_p'),
+    env.place('a_q0'),
     env.new('dr0.1', xt.Drift, length=sizes['dr0.1'][0]),
+    env.place('beampipe'),
+    env.new('q1', xt.Quadrupole, length=sizes['q1'][-1], k1='kq_n'),
     env.place('a_q1'),
-    env.new('q1', xt.Quadrupole, length=sizes['q1'][-1], k1s='kq_n'),
     env.new('dr1.2', xt.Drift, length=sizes['dr1.2'][0]),
-    env.place('a_q2'),
+    env.place('beampipe'),
     env.new('q2', xt.Quadrupole, length=sizes['q2'][-1], k1='kq_p'),
+    env.place('a_q2'),
     env.new('dr2.corr', xt.Drift, length=sizes['dr2.corr'][0]),
-    env.place('a_dd_corr'),
+    env.place('beampipe'),
     env.new('dd_corr', xt.Bend, length=sizes['corr'][-1],k0 ='kd_corr'), # creates By field
+    env.place('a_dd_corr'),
     env.new('drcorr.d', xt.Drift, length=sizes['drcorr.d'][0]),
-    env.place('a_dd'),
+    env.place('beampipe'),
     env.new('dd', xt.Bend, length=sizes['dd'][-1], rot_s_rad=-np.pi/2, k0='kd'), # Bx field
+    env.place('a_dd'),
     env.new('dr_end', xt.Drift, length=1.0),
 ])
 
@@ -143,10 +148,8 @@ def plot_beam_size():
     # Inspect beam sizes (table can be accessed similarly to twiss tables)
     beam_sizes.show()
 
-
-    fig0 = plt.figure(0, figsize=(6.4, 4.8))    
     sv = line.survey()
-    sv.plot(fig0)
+    sv.plot()
 
     # Plot
     fig1 = plt.figure(1, figsize=(6.4, 4.8*1.5))
@@ -185,8 +188,8 @@ def plot_beam_size():
         ax.set_ylim(ylim)
 
     fig1.subplots_adjust(left=.15, right=.92, hspace=.27)
-    plt.show()
 
+# plot_beam_size()
 
 # %% 
 
@@ -274,8 +277,10 @@ def track_line(line, particles, plot=True):
 
     # Track through each element individually
     for i, element_name in enumerate(elements_names):
-        s_start = tt.rows[element_name].s[0]
-        s_stop = tt.rows[i+1].s[0]
+        s_start = tt.rows[i].s
+        s_start = s_start[0]
+        s_stop = tt.rows[i+1].s
+        s_stop = s_stop[0]
         print(f"ELEMENT {i}: {element_name} || s={s_start:.3f}:{s_stop:.3f} m")
 
         s_values[i+1] = s_stop
@@ -323,9 +328,9 @@ def phase_plot_line(line, particle_list):
         drift_idx = element_names.index(drift_name)
         
         # Get adjacent elements: aperture and magnet
-        # Typically drift -> aperture -> magnet pattern
-        aperture_idx = drift_idx + 1
-        magnet_idx = drift_idx + 2
+        # Typically drift -> beampipe -> magnet pattern -> magnet apr
+        beampipe_idx = drift_idx + 1
+        magnet_idx = drift_idx + 3
         
         # Make sure indices are valid
         if magnet_idx >= len(element_names):
@@ -333,15 +338,16 @@ def phase_plot_line(line, particle_list):
 
         # +1 because I want _after_ the element    
         drift_particles = alive_particles[drift_idx+1]
-        aperture_particles = alive_particles[aperture_idx+1]
+        aperture_particles = alive_particles[beampipe_idx+1]
         magnet_particles = alive_particles[magnet_idx+1]
         
         # Create a figure with 6 subplots: 2 rows (x and y) and 3 columns (drift, aperture, magnet)
-        fig, axs = plt.subplots(2, 3, figsize=u['fig_size'])
+        fig, axs = plt.subplots(2, 3, figsize=u['fig_size'],
+                                sharex='col', sharey='row', tight_layout=True)
         fig.suptitle(f"Phase Plane Histograms for {drift_name} and Adjacent Elements", fontsize=16)
         
         # Column titles
-        col_titles = [drift_name, element_names[aperture_idx], element_names[magnet_idx]]
+        col_titles = [drift_name, element_names[beampipe_idx], element_names[magnet_idx]]
         for j, title in enumerate(col_titles):
             axs[0, j].set_title(f"after {title}")
         
@@ -394,7 +400,7 @@ def phase_plot_line(line, particle_list):
     
 
 
-def xy_plot_line(line, particle_list):
+def xy_plot_line(line, particle_list, ele_str, elementNames, n_bin=100):
     """
     Generate XY plots for quadrupoles in the beam line.
     For each quadrupole, create a figure showing the XY distribution 
@@ -404,55 +410,57 @@ def xy_plot_line(line, particle_list):
     element_names = line.element_names
     
     # Identify all quadrupoles in the line
-    quad_elements = [name for name in element_names if name.startswith('q')]
-    print("...Plotting XY pictures for quadrupoles...")
+    plot_elements = [name for name in element_names if name.startswith(ele_str)]
+    print("...Plotting XY pictures for plotted elements...")
     
     alive_particles = []
     for p in particle_list:
         alive_particles.append(p.filter(p.state > 0))
     
     # Create one figure with 3x2 subplots (3 quads, entrance and exit)
-    fig, axs = plt.subplots(2, len(quad_elements), figsize=u['fig_size'])
-    fig.suptitle("XY Distribution at Quadrupole Entrances and Exits", fontsize=16)
+    fig, axs = plt.subplots(2, len(plot_elements), figsize=u['fig_size'],
+                             sharex=True, sharey=True, tight_layout=True)
+    fig.suptitle(f"XY Distribution at {elementNames} Entrances and Exits", fontsize=16)
     
-    for i, quad_name in enumerate(quad_elements):
+    for i, ele_names in enumerate(plot_elements):
 
         # Find the quadrupole index in the element_names list
-        quad_idx = element_names.index(quad_name)
+        ele_idx = element_names.index(ele_names)
         
-        # Get particles at entrance (element before quad) and exit (after quad)
-        entrance_particles = alive_particles[quad_idx]  # Before the quad
-        exit_particles = alive_particles[quad_idx+1]    # After the quad
-        
+        # Get particles at entrance (element before ele) and exit (after ele)
+        entrance_particles = alive_particles[ele_idx]  # Before the ele
+        exit_particles = alive_particles[ele_idx+2]    # After the aperture of the ele
+
         # Plot entrance distribution (top row)
         h, _, _, im = axs[0, i].hist2d(entrance_particles.x, entrance_particles.y, 
-                                     bins=(100, 100), rasterized=True)
-        axs[0, i].set_title(f"{quad_name} entrance")
+                                     bins=(n_bin, n_bin), rasterized=True)
+        axs[0, i].set_title(f"{ele_names} entrance")
         axs[0, i].set_xlabel('x [m]')
         axs[0, i].set_ylabel('y [m]')
-        axs[0, i].grid(True, linewidth=0.25, alpha=0.25)
+        # axs[0, i].grid(True, linewidth=0.25, alpha=0.25)
         fig.colorbar(im, ax=axs[0, i])
         
         # Plot exit distribution (bottom row)
         h, _, _, im = axs[1, i].hist2d(exit_particles.x, exit_particles.y, 
-                                     bins=(100, 100), rasterized=True)
-        axs[1, i].set_title(f"{quad_name} exit")
+                                     bins=(n_bin, n_bin), rasterized=True)
+        axs[1, i].set_title(f"{ele_names} exit")
         axs[1, i].set_xlabel('x [m]')
         axs[1, i].set_ylabel('y [m]')
-        axs[1, i].grid(True, linewidth=0.25, alpha=0.25)
+        # axs[1, i].grid(True, linewidth=0.25, alpha=0.25)
         fig.colorbar(im, ax=axs[1, i])
     
     plt.tight_layout()
     plt.subplots_adjust(top=0.92)
     
-    print("Finished plotting quadrupole XY distributions.")
+    print(f"Finished plotting {elementNames} XY distributions.")
 
 
 
 # phase_plot_line(line, particle_list)
-xy_plot_line(line, particle_list)
+xy_plot_line(line, particle_list, ele_str='q', elementNames='Quadrupoles', n_bin=300)
+xy_plot_line(line, particle_list, ele_str='dd', elementNames='Dipoles', n_bin=300)
 print("Finished creating plots of phase planes.")
-plt.show()
+# plt.show()
 
 print("Plotted phase planes.")
 
