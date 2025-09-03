@@ -54,6 +54,7 @@ zBe     = -0.84 ### the beryllium window, cm
 Z0      = zBe if(MagnetSettings==502) else zAL
 
 # %% +++++++++Monitor sizes 
+particle_start_pos = 0.3 # m
 npix_x = 1024
 npix_y = 512
 pix_x  = 0.02924
