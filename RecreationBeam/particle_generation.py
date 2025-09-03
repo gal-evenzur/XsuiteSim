@@ -85,23 +85,15 @@ max_dt  = 1e-9
 ########################################################################
 ########################################################################
 def GenerateGaussianBeam(E_GeV,mass_GeV,charge,mks=False):
-    ### These variables assumed to be class members
-    fx0         = 0*mm_to_m ### TODO???
-    fy0         = 0 ### TODO???
-    fz0         = -200*cm_to_m
     fbeamfocus  = 0
-    fsigmax     = 50*um_to_m
-    fsigmay     = 50*um_to_m
-    fsigmaz     = 150*um_to_m
     lf          = E_GeV/mass_GeV
     femittancex = 50e-3*mm_to_m/lf ### mm-rad
     femittancey = 50e-3*mm_to_m/lf ### mm-rad
     fbetax      = (fsigmax**2)/femittancex
     fbetay      = (fsigmay**2)/femittancey
-    
     ### z
     z0     = np.random.normal(fz0,fsigmaz)
-    zdrift = z0 - fbeamfocus ### correct drift distance for x, y distribution.
+    zdrift = z0 - fbeamfocus ### correct drift distance for x, y distribution. Forces the beam to pass through the IP (i.e. focuesd at z=0)
     ### x
     sigmax  = fsigmax * np.sqrt(1.0 + (zdrift/fbetax)**2)
     x0      = np.random.normal(fx0, sigmax)
@@ -155,7 +147,7 @@ def truncated_exp_NK(a,b,how_many):
     return rands[0] if(how_many==1) else rands
 
 
-def simulate_secondary_production(primary_state,q=+1,Emin=0.5,Emax=5,smear_T=False,smear_pT=False):
+def simulate_secondary_production(primary_state,q=+1,Emin=0.5,Emax=5,smear_T=False,smear_pT=False):    
     x      = primary_state[0]
     y      = primary_state[1]
     z      = primary_state[2]
@@ -163,26 +155,32 @@ def simulate_secondary_production(primary_state,q=+1,Emin=0.5,Emax=5,smear_T=Fal
     py     = primary_state[4]
     pz     = primary_state[5]
     mass   = primary_state[6]
-    charge = primary_state[7]
-    
     ### smear trasverse position
-    if(smear_pT):
-        x = x + np.random.normal(0,0.3*um_to_m)
-        y = y + np.random.normal(0,0.3*um_to_m)
+    if(smear_T):
+        x = x + np.random.normal(0,smear_sigma_T_um*um_to_m)
+        y = y + np.random.normal(0,smear_sigma_T_um*um_to_m)
     ### smear trasverse momenta
     if(smear_pT):
-        smear_sigmax = 1.5e-3 ### GeV
-        smear_sigmay = 1.5e-3 ### GeV
-        px = px + np.random.normal(0,smear_sigmax) 
-        py = py + np.random.normal(0,smear_sigmay)
+        px = px + np.random.normal(0,smear_sigma_P_GeV) 
+        py = py + np.random.normal(0,smear_sigma_P_GeV)
     ### sample energy from exponential
-    E = truncated_exp_NK(Emin,Emax,1) # GeV
+    E = truncated_exp_NK(Emin,Emax,1) if(Emax>Emin) else Emin # GeV
     ### assume the x-y momemnta staty the same and correct the z momentum
     pz = np.sqrt( E**2 - mass**2 - px**2 - py**2 ) # GeV
     secondary_state = [x,y,z, px,py,pz, mass, q]
-    
     return secondary_state
 
+def state_GeV_to_kgms(state):
+    state_mks = [0]*len(state)
+    state_mks[0] = state[0]
+    state_mks[1] = state[1]
+    state_mks[2] = state[2]
+    state_mks[3] = state[3]*GeV_to_kgms # kg*m/s
+    state_mks[4] = state[4]*GeV_to_kgms # kg*m/s
+    state_mks[5] = state[5]*GeV_to_kgms # kg*m/s
+    state_mks[6] = state[6]*GeV_to_kgm2s2/c2 # kg
+    state_mks[7] = state[7]
+    return state_mks
 
 
 def plot_divergence(states, title=""):

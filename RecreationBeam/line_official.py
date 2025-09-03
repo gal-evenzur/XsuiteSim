@@ -32,13 +32,11 @@ env['kd'] = B_T_to_k(B_dd, ref['p'] * u['eV_to_kgms'], ref['q'] * u['e'])  # k0 
 env['kd_corr'] = B_T_to_k(B_dd_xcorr, ref['p'] * u['eV_to_kgms'], ref['q'] * u['e']) # By --> -xhat
 
 # %% -*-*--*-*-Line creation
-env.new('a_q0', xt.LimitRect, min_x=sizes['q0'][0], max_x=sizes['q0'][1], min_y=sizes['q0'][2], max_y=sizes['q0'][3]),
-env.new('a_q1', xt.LimitRect, min_x=sizes['q1'][0], max_x=sizes['q1'][1], min_y=sizes['q1'][2], max_y=sizes['q1'][3]),
-env.new('a_q2', xt.LimitRect, min_x=sizes['q2'][0], max_x=sizes['q2'][1], min_y=sizes['q2'][2], max_y=sizes['q2'][3]),
-env.new('a_dd_corr', xt.LimitRect, min_x=sizes['corr'][0], max_x=sizes['corr'][1], min_y=sizes['corr'][2], max_y=sizes['corr'][3]),
-env.new('a_dd', xt.LimitRect, min_x=sizes['dd'][0], max_x=sizes['dd'][1], min_y=sizes['dd'][2], max_y=sizes['dd'][3]),
-
-env.new('beampipe', xt.LimitEllipse, a=0.05, b=0.05) #beampipe of 2 cm
+env.new('a_q0', xt.LimitRectEllipse, max_x=sizes['q0'][1], max_y=sizes['q0'][3], a=sizes['pipe'], b=sizes['pipe']),
+env.new('a_q1', xt.LimitRectEllipse, max_x=sizes['q1'][1], max_y=sizes['q1'][3], a=sizes['pipe'], b=sizes['pipe']),
+env.new('a_q2', xt.LimitRectEllipse, max_x=sizes['q2'][1], max_y=sizes['q2'][3], a=sizes['pipe'], b=sizes['pipe']),
+env.new('a_dd_corr', xt.LimitRectEllipse, max_x=sizes['corr'][1], max_y=sizes['corr'][3], a=sizes['pipe'], b=sizes['pipe']),
+env.new('a_dd', xt.LimitRectEllipse, max_x=sizes['dd'][1], max_y=sizes['dd'][3], a=sizes['pipe'], b=sizes['pipe']),
 
 # Monitor at the end
 env.new('a_m0', xt.LimitRect, min_x=sizes['m0'][0], max_x=sizes['m0'][1], min_y=sizes['m0'][2], max_y=sizes['m0'][3]),
@@ -51,23 +49,23 @@ env.elements['m0'] = xt.ParticlesMonitor(num_particles=int(n_particles),
 # Order: drift - beampipe - quadrupole - aperture
 line = env.new_line(components=[
     env.new('dr0', xt.Drift, length=sizes['dr0'][0]),
-    env.place('beampipe'),
+    env.place('a_q0'),
     env.new('q0', xt.Quadrupole, length=sizes['q0'][-1], k1='kq_p'),
     env.place('a_q0'),
     env.new('dr0.1', xt.Drift, length=sizes['dr0.1'][0]),
-    env.place('beampipe'),
+    env.place('a_q1'),
     env.new('q1', xt.Quadrupole, length=sizes['q1'][-1], k1='kq_n'),
     env.place('a_q1'),
     env.new('dr1.2', xt.Drift, length=sizes['dr1.2'][0]),
-    env.place('beampipe'),
+    env.place('a_q2'),
     env.new('q2', xt.Quadrupole, length=sizes['q2'][-1], k1='kq_p'),
     env.place('a_q2'),
     env.new('dr2.corr', xt.Drift, length=sizes['dr2.corr'][0]),
-    env.place('beampipe'),
+    env.place('a_dd_corr'),
     env.new('dd_corr', xt.Bend, length=sizes['corr'][-1],k0 ='kd_corr'), # creates By field
     env.place('a_dd_corr'),
     env.new('drcorr.d', xt.Drift, length=sizes['drcorr.d'][0]),
-    env.place('beampipe'),
+    env.place('a_dd'),
     env.new('dd', xt.Bend, length=sizes['dd'][-1], rot_s_rad=-np.pi/2, k0='kd'), # Bx field
     env.place('a_dd'),
     env.place('a_m0', at=sizes['m0'][-1]),
@@ -426,14 +424,14 @@ def xy_plot_line(line, particle_list, ele_str, elementNames, n_bin=100):
 
 
 # phase_plot_line(line, particle_list)
-xy_plot_line(line, particle_list, ele_str='q', elementNames='Quadrupoles', n_bin=300)
-xy_plot_line(line, particle_list, ele_str='dd', elementNames='Dipoles', n_bin=300)
+# xy_plot_line(line, particle_list, ele_str='q', elementNames='Quadrupoles', n_bin=300)
+# xy_plot_line(line, particle_list, ele_str='dd', elementNames='Dipoles', n_bin=300)
 print("Finished creating plots of phase planes.")
 # plt.show()
 
 print("Plotted phase planes.")
 
-def plot_trajectories(particle_list, s_values, n_plot=100, show_dead=False):
+def plot_trajectories(particle_list, s_values, n_plot=100, show_dead=False, limit_line_width=2, limit_line_length=0.1):
     x_values = [p.x for p in particle_list]
     y_values = [p.y for p in particle_list]  # shape = (num_elements+1, num_particles)
 
@@ -442,7 +440,8 @@ def plot_trajectories(particle_list, s_values, n_plot=100, show_dead=False):
     y_values = np.array(y_values)
 
     # Create a figure for particle trajectories
-    fig, axes = plt.subplots(1, 2, figsize=u['fig_size'])
+    fig, axes = plt.subplots(1, 2, figsize=u['fig_size'],
+                             sharex=True, sharey=True)
 
     # Select a subset of particles for better readability (max 100 particles)
     num_to_plot = min(n_plot, particles.x.size)
@@ -464,8 +463,8 @@ def plot_trajectories(particle_list, s_values, n_plot=100, show_dead=False):
             axes[1].plot(s_values, y_values[:, idx], 'r-', alpha=0.3, linewidth=0.5)
         elif show_dead:
             # If particle died, use purple for x and yellow for y
-            axes[0].plot(s_values[:], x_values[:, idx], 'purple', alpha=0.3, linewidth=0.5)
-            axes[1].plot(s_values[:], y_values[:, idx], 'magenta', alpha=0.3, linewidth=0.5)
+            axes[0].plot(s_values[:loss_step], x_values[:loss_step, idx], 'purple', alpha=0.3, linewidth=0.5)
+            axes[1].plot(s_values[:loss_step], y_values[:loss_step, idx], 'magenta', alpha=0.3, linewidth=0.5)
             # Mark the loss point with a scatter point
             axes[0].scatter(s_values[loss_step-1], x_values[loss_step-1, idx], color='k', s=9, alpha=0.7)
             axes[1].scatter(s_values[loss_step-1], y_values[loss_step-1, idx], color='k', s=9, alpha=0.7)
@@ -494,17 +493,104 @@ def plot_trajectories(particle_list, s_values, n_plot=100, show_dead=False):
             if 'a_' in name.lower():  # Apertures - black lines
                 ax.axvline(x=s_pos, color='k', alpha=0.5, linestyle='--')
                 ax.text(s_pos, ylim[1]*0.9, name, rotation=90, verticalalignment='top', fontsize=8)
+                
+                # Add element limits as small horizontal lines with proper x/y limits
+                if 'q0' in name:
+                    # X limits in ax[0], Y limits in ax[1]
+                    if ax == axes[0]:  # X axis plot
+                        ax.hlines(y=sizes['q0'][0], xmin=s_pos-limit_line_length, xmax=s_pos+limit_line_length, color='k', linewidth=limit_line_width)
+                        ax.hlines(y=sizes['q0'][1], xmin=s_pos-limit_line_length, xmax=s_pos+limit_line_length, color='k', linewidth=limit_line_width)
+                    else:  # Y axis plot
+                        ax.hlines(y=sizes['q0'][2], xmin=s_pos-limit_line_length, xmax=s_pos+limit_line_length, color='k', linewidth=limit_line_width)
+                        ax.hlines(y=sizes['q0'][3], xmin=s_pos-limit_line_length, xmax=s_pos+limit_line_length, color='k', linewidth=limit_line_width)
+                elif 'q1' in name:
+                    if ax == axes[0]:
+                        ax.hlines(y=sizes['q1'][0], xmin=s_pos-limit_line_length, xmax=s_pos+limit_line_length, color='k', linewidth=limit_line_width)
+                        ax.hlines(y=sizes['q1'][1], xmin=s_pos-limit_line_length, xmax=s_pos+limit_line_length, color='k', linewidth=limit_line_width)
+                    else:
+                        ax.hlines(y=sizes['q1'][2], xmin=s_pos-limit_line_length, xmax=s_pos+limit_line_length, color='k', linewidth=limit_line_width)
+                        ax.hlines(y=sizes['q1'][3], xmin=s_pos-limit_line_length, xmax=s_pos+limit_line_length, color='k', linewidth=limit_line_width)
+                elif 'q2' in name:
+                    if ax == axes[0]:
+                        ax.hlines(y=sizes['q2'][0], xmin=s_pos-limit_line_length, xmax=s_pos+limit_line_length, color='k', linewidth=limit_line_width)
+                        ax.hlines(y=sizes['q2'][1], xmin=s_pos-limit_line_length, xmax=s_pos+limit_line_length, color='k', linewidth=limit_line_width)
+                    else:
+                        ax.hlines(y=sizes['q2'][2], xmin=s_pos-limit_line_length, xmax=s_pos+limit_line_length, color='k', linewidth=limit_line_width)
+                        ax.hlines(y=sizes['q2'][3], xmin=s_pos-limit_line_length, xmax=s_pos+limit_line_length, color='k', linewidth=limit_line_width)
+                elif 'corr' in name:
+                    if ax == axes[0]:
+                        ax.hlines(y=sizes['corr'][0], xmin=s_pos-limit_line_length, xmax=s_pos+limit_line_length, color='k', linewidth=limit_line_width)
+                        ax.hlines(y=sizes['corr'][1], xmin=s_pos-limit_line_length, xmax=s_pos+limit_line_length, color='k', linewidth=limit_line_width)
+                    else:
+                        ax.hlines(y=sizes['corr'][2], xmin=s_pos-limit_line_length, xmax=s_pos+limit_line_length, color='k', linewidth=limit_line_width)
+                        ax.hlines(y=sizes['corr'][3], xmin=s_pos-limit_line_length, xmax=s_pos+limit_line_length, color='k', linewidth=limit_line_width)
+                elif 'dd' in name:
+                    if ax == axes[0]:
+                        ax.hlines(y=sizes['dd'][0], xmin=s_pos-limit_line_length, xmax=s_pos+limit_line_length, color='k', linewidth=limit_line_width)
+                        ax.hlines(y=sizes['dd'][1], xmin=s_pos-limit_line_length, xmax=s_pos+limit_line_length, color='k', linewidth=limit_line_width)
+                    else:
+                        ax.hlines(y=sizes['dd'][2], xmin=s_pos-limit_line_length, xmax=s_pos+limit_line_length, color='k', linewidth=limit_line_width)
+                        ax.hlines(y=sizes['dd'][3], xmin=s_pos-limit_line_length, xmax=s_pos+limit_line_length, color='k', linewidth=limit_line_width)
+                elif 'm0' in name:
+                    if ax == axes[0]:
+                        ax.hlines(y=sizes['m0'][0], xmin=s_pos-limit_line_length, xmax=s_pos+limit_line_length, color='k', linewidth=limit_line_width)
+                        ax.hlines(y=sizes['m0'][1], xmin=s_pos-limit_line_length, xmax=s_pos+limit_line_length, color='k', linewidth=limit_line_width)
+                    else:
+                        ax.hlines(y=sizes['m0'][2], xmin=s_pos-limit_line_length, xmax=s_pos+limit_line_length, color='k', linewidth=limit_line_width)
+                        ax.hlines(y=sizes['m0'][3], xmin=s_pos-limit_line_length, xmax=s_pos+limit_line_length, color='k', linewidth=limit_line_width)
+
             elif name.startswith('dd'):  # Dipoles - pink lines
                 ax.axvline(x=s_pos, color='magenta', alpha=0.5, linestyle='--')
                 ax.text(s_pos, ylim[1]*0.8, name, rotation=90, verticalalignment='top', fontsize=8)
+                
+                # Add element limits with proper x/y limits
+                if 'corr' in name:
+                    if ax == axes[0]:
+                        ax.hlines(y=sizes['corr'][0], xmin=s_pos-limit_line_length, xmax=s_pos+limit_line_length, color='magenta', linewidth=limit_line_width)
+                        ax.hlines(y=sizes['corr'][1], xmin=s_pos-limit_line_length, xmax=s_pos+limit_line_length, color='magenta', linewidth=limit_line_width)
+                    else:
+                        ax.hlines(y=sizes['corr'][2], xmin=s_pos-limit_line_length, xmax=s_pos+limit_line_length, color='magenta', linewidth=limit_line_width)
+                        ax.hlines(y=sizes['corr'][3], xmin=s_pos-limit_line_length, xmax=s_pos+limit_line_length, color='magenta', linewidth=limit_line_width)
+                else:
+                    if ax == axes[0]:
+                        ax.hlines(y=sizes['dd'][0], xmin=s_pos-limit_line_length, xmax=s_pos+limit_line_length, color='magenta', linewidth=limit_line_width)
+                        ax.hlines(y=sizes['dd'][1], xmin=s_pos-limit_line_length, xmax=s_pos+limit_line_length, color='magenta', linewidth=limit_line_width)
+                    else:
+                        ax.hlines(y=sizes['dd'][2], xmin=s_pos-limit_line_length, xmax=s_pos+limit_line_length, color='magenta', linewidth=limit_line_width)
+                        ax.hlines(y=sizes['dd'][3], xmin=s_pos-limit_line_length, xmax=s_pos+limit_line_length, color='magenta', linewidth=limit_line_width)
+                
             elif name.startswith('q'):  # Quadrupoles - green lines
                 ax.axvline(x=s_pos, color='green', alpha=0.5, linestyle='--')
                 ax.text(s_pos, ylim[1]*0.7, name, rotation=90, verticalalignment='top', fontsize=8)
+                
+                # Add element limits with proper x/y limits
+                if '0' in name:
+                    if ax == axes[0]:
+                        ax.hlines(y=sizes['q0'][0], xmin=s_pos-limit_line_length, xmax=s_pos+limit_line_length, color='green', linewidth=limit_line_width)
+                        ax.hlines(y=sizes['q0'][1], xmin=s_pos-limit_line_length, xmax=s_pos+limit_line_length, color='green', linewidth=limit_line_width)
+                    else:
+                        ax.hlines(y=sizes['q0'][2], xmin=s_pos-limit_line_length, xmax=s_pos+limit_line_length, color='green', linewidth=limit_line_width)
+                        ax.hlines(y=sizes['q0'][3], xmin=s_pos-limit_line_length, xmax=s_pos+limit_line_length, color='green', linewidth=limit_line_width)
+                elif '1' in name:
+                    if ax == axes[0]:
+                        ax.hlines(y=sizes['q1'][0], xmin=s_pos-limit_line_length, xmax=s_pos+limit_line_length, color='green', linewidth=limit_line_width)
+                        ax.hlines(y=sizes['q1'][1], xmin=s_pos-limit_line_length, xmax=s_pos+limit_line_length, color='green', linewidth=limit_line_width)
+                    else:
+                        ax.hlines(y=sizes['q1'][2], xmin=s_pos-limit_line_length, xmax=s_pos+limit_line_length, color='green', linewidth=limit_line_width)
+                        ax.hlines(y=sizes['q1'][3], xmin=s_pos-limit_line_length, xmax=s_pos+limit_line_length, color='green', linewidth=limit_line_width)
+                elif '2' in name:
+                    if ax == axes[0]:
+                        ax.hlines(y=sizes['q2'][0], xmin=s_pos-limit_line_length, xmax=s_pos+limit_line_length, color='green', linewidth=limit_line_width)
+                        ax.hlines(y=sizes['q2'][1], xmin=s_pos-limit_line_length, xmax=s_pos+limit_line_length, color='green', linewidth=limit_line_width)
+                    else:
+                        ax.hlines(y=sizes['q2'][2], xmin=s_pos-limit_line_length, xmax=s_pos+limit_line_length, color='green', linewidth=limit_line_width)
+                        ax.hlines(y=sizes['q2'][3], xmin=s_pos-limit_line_length, xmax=s_pos+limit_line_length, color='green', linewidth=limit_line_width)
+            
             ax.set_ylim(ylim)
 
 
 
-plot_trajectories(particle_list, s_values, n_plot=190)
+plot_trajectories(particle_list, s_values, n_plot=190, show_dead=show_dead)
 
 # %% Monitors!!
 

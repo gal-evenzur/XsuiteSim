@@ -7,6 +7,7 @@ plt.rcParams['image.cmap'] = 'afmhot'
 
 n_particles = 5e4
 MagnetSettings = 490
+show_dead = True
 
 # %% CONSTS________
 u = {
@@ -47,8 +48,12 @@ Grad2 = magsetvals[MagnetSettings][1]
 B_dd_xcorr = 0.026107 # Bx 
 B_dd = 0.219 # By
 
+zAL     = 0.30 ### the aluminum foil, cm
+zBe     = -0.84 ### the beryllium window, cm
+Z0      = zBe if(MagnetSettings==502) else zAL
+
+
 # %% +++++++++Monitor sizes 
-particle_start_pos = 0 # m
 npix_x = 1024
 npix_y = 512
 pix_x  = 0.02924
@@ -59,8 +64,9 @@ chipXcm = chipXmm*u['mm_to_cm']
 chipYcm = chipYmm*u['mm_to_cm']
 chipXm  = chipXmm*u['mm_to_m']
 chipYm  = chipYmm*u['mm_to_m']
-dy_det  = 0 # cm
+dy_det  = 0.35 # cm
 
+particle_start_pos = Z0 # m
 # Define detector x range
 detector_x_center_cm = -1.0 # cm
 # detector_x_center_cm = 0. # cm
@@ -89,7 +95,8 @@ sizes = { # min_x, max_x, min_y, max_y in m, start z, stop z, length in m
     'dd': [-0.022352, 0.02352, -0.063752, 0.031752, 13.5178-12.6034],
     'm0': [detector_x_center_m-chipYm/2., detector_x_center_m+chipYm/2.,
            detector_y_center_m-chipXm/2.,detector_y_center_m+chipXm/2.,
-           detector_z_base_m]
+           detector_z_base_m],
+    'pipe': 0.02 # radius in m
 }
 
 
