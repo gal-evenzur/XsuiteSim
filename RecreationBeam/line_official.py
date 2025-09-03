@@ -38,7 +38,7 @@ env.new('a_q2', xt.LimitRect, min_x=sizes['q2'][0], max_x=sizes['q2'][1], min_y=
 env.new('a_dd_corr', xt.LimitRect, min_x=sizes['corr'][0], max_x=sizes['corr'][1], min_y=sizes['corr'][2], max_y=sizes['corr'][3]),
 env.new('a_dd', xt.LimitRect, min_x=sizes['dd'][0], max_x=sizes['dd'][1], min_y=sizes['dd'][2], max_y=sizes['dd'][3]),
 
-env.new('beampipe', xt.LimitEllipse, a=0.02, b=0.02) #beampipe of 2 cm
+env.new('beampipe', xt.LimitEllipse, a=0.05, b=0.05) #beampipe of 2 cm
 
 # Monitor at the end
 env.new('a_m0', xt.LimitRect, min_x=sizes['m0'][0], max_x=sizes['m0'][1], min_y=sizes['m0'][2], max_y=sizes['m0'][3]),
@@ -87,11 +87,11 @@ line.build_tracker()
 # %% ~~~~~~Twiss~~~~~~~~
 init = xt.TwissInit(betx=ref['betx_0'], alfx=ref['alfx_0'], bety=ref['bety_0'], alfy=ref['alfy_0'])  # example values
 
-tw = line.twiss(
-    method='4d',
-    init=init,
-    end='_end_point',
-)
+# tw = line.twiss(
+#     method='4d',
+#     init=init,
+#     end='_end_point',
+# )
 
 # Beam size investigation
 def plot_beam_size():
@@ -179,45 +179,46 @@ def import_particles_from_hdf5(filename, p0c):
         px_coords = f['px'][:] # [GeV/c]
         py_coords = f['py'][:] # [GeV/c]
         pz_coords = f['pz'][:] # [GeV/c]
-
-        px_eV = px_coords * u['GeV_to_eV']
-        py_eV = py_coords * u['GeV_to_eV']
-        pz_eV = pz_coords * u['GeV_to_eV']
-
-        p = np.sqrt(px_eV**2 + py_eV**2 + pz_eV**2)
-
-        px = px_eV / p0c # dimensionless
-        py = py_eV / p0c # dimensionless
-
-        delta = (p - p0c) / p0c  # dimensionless
-        
-
-        # Get number of particles
         num_particles = f.attrs['num_particles']
-        print(f"Loaded {num_particles} particles")
-        
-        # Print min/max values to verify data
-        print(f"x range: [{np.min(x_coords):.6f}, {np.max(x_coords):.6f}] m")
-        print(f"y range: [{np.min(y_coords):.6f}, {np.max(y_coords):.6f}] m")
-        print(f"z range: [{np.min(z_coords):.6f}, {np.max(z_coords):.6f}] m")
-        print(f"px range: [{np.min(px):.6f}, {np.max(px):.6f}]")
-        print(f"py range: [{np.min(py):.6f}, {np.max(py):.6f}]")
-        print(f"delta range: [{np.min(delta):.6f}, {np.max(delta):.6f}]")
 
-        # Create the particle object for tracking
-        particles = xp.Particles(
-            x=x_coords,
-            px=px,
-            y=y_coords,
-            py=py,
-            zeta=z_coords,
-            delta=delta,  # delta = (pz [eV/c] - p0 [eV/c]) / p0
-            _context=ctx,
-        )
-        
-        return particles
+    px_eV = px_coords * u['GeV_to_eV']
+    py_eV = py_coords * u['GeV_to_eV']
+    pz_eV = pz_coords * u['GeV_to_eV']
 
-particles = import_particles_from_hdf5('Data/secondary_particles.h5', ref['p'])
+    p = np.sqrt(px_eV**2 + py_eV**2 + pz_eV**2)
+
+    px = px_eV / p0c # dimensionless
+    py = py_eV / p0c # dimensionless
+
+    delta = (p - p0c) / p0c  # dimensionless
+    
+
+    # Get number of particles
+    print(f"Loaded {num_particles} particles")
+    
+    # Print min/max values to verify data
+    print(f"x range: [{np.min(x_coords):.6f}, {np.max(x_coords):.6f}] m")
+    print(f"y range: [{np.min(y_coords):.6f}, {np.max(y_coords):.6f}] m")
+    print(f"z range: [{np.min(z_coords):.6f}, {np.max(z_coords):.6f}] m")
+    print(f"px range: [{np.min(px):.6f}, {np.max(px):.6f}]")
+    print(f"py range: [{np.min(py):.6f}, {np.max(py):.6f}]")
+    print(f"delta range: [{np.min(delta):.6f}, {np.max(delta):.6f}]")
+
+    # Create the particle object for tracking
+    particles = line.build_particles(
+        x=x_coords,
+        px=px,
+        y=y_coords,
+        py=py,
+        zeta=0,
+        delta=delta,  # delta = (pz [eV/c] - p0 [eV/c]) / p0
+        _context=ctx,
+    )
+        
+    return particles
+
+# particles = import_particles_from_hdf5('Data/secondary_particles.h5', ref['p'])
+particles = line.build_particles(x=0,y=0,px=0, py=0)
 pt = particles.get_table()
 
 tt = line.get_table()
@@ -249,7 +250,9 @@ def track_line(line, particles):
 
         # Track through this single element
         line.track(tracked_particles, ele_start=element_name, num_elements=1)
-        particle_list.append(tracked_particles.copy())
+        par_to_list = tracked_particles.copy()
+        par_to_list.sort(interleave_lost_particles=True)
+        particle_list.append(par_to_list)
 
 
     return particle_list, s_values
@@ -455,10 +458,10 @@ def plot_trajectories(particle_list, s_values, n_plot=100):
         loss_step = particle_lost_at[idx]
         loss_step = int(loss_step)
 
-        if loss_step == x_values.shape[0]:pass
+        if loss_step == x_values.shape[0]:
             # If particle survived, use the original blue and red
-            # axes[0].plot(s_values, x_values[:, idx], 'b-', alpha=0.3, linewidth=0.5)
-            # axes[1].plot(s_values, y_values[:, idx], 'r-', alpha=0.3, linewidth=0.5)
+            axes[0].plot(s_values, x_values[:, idx], 'b-', alpha=0.3, linewidth=0.5)
+            axes[1].plot(s_values, y_values[:, idx], 'r-', alpha=0.3, linewidth=0.5)
         else:
             # If particle died, use purple for x and yellow for y
             axes[0].plot(s_values[:], x_values[:, idx], 'purple', alpha=0.3, linewidth=0.5)

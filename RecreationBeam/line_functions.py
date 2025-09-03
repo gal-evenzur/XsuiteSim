@@ -5,8 +5,8 @@ from matplotlib.colors import LogNorm
 import xtrack as xt
 plt.rcParams['image.cmap'] = 'afmhot'
 
-n_particles = 50000
-MagnetSettings = 502
+n_particles = 1000
+MagnetSettings = 490.0
 
 # %% CONSTS________
 u = {
@@ -61,7 +61,7 @@ chipYm  = chipYmm*u['mm_to_m']
 dy_det  = +0.35 # cm
 
 # Define detector x range
-detector_x_center_cm = 0 # cm
+detector_x_center_cm = 1.0 # cm
 # detector_x_center_cm = 0. # cm
 detector_x_center_m = detector_x_center_cm*u['cm_to_m']
 
