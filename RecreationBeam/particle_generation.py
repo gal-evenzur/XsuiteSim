@@ -11,8 +11,7 @@ plt.rcParams['image.cmap'] = 'afmhot'
 # plt.rcParams['image.cmap'] = 'copper'
 plt.rcParams['text.usetex'] = True
 
-Nparticles = 1000
-MagnetsSettings = 502
+MagnetsSettings = 490
 mltprc = True
 doshw  = True
 dogif = False
@@ -437,7 +436,7 @@ def plot_2h(states1,states2):
 
 
 states = []
-for i in range(n_particles):
+for i in range(int(n_particles)):
     ### particle species
     MM = m_e ## kg, positron
     QQ = +1  ## unit charge, positron

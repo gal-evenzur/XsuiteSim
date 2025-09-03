@@ -42,7 +42,7 @@ env.new('beampipe', xt.LimitEllipse, a=0.05, b=0.05) #beampipe of 2 cm
 
 # Monitor at the end
 env.new('a_m0', xt.LimitRect, min_x=sizes['m0'][0], max_x=sizes['m0'][1], min_y=sizes['m0'][2], max_y=sizes['m0'][3]),
-env.elements['m0'] = xt.ParticlesMonitor(num_particles=n_particles,
+env.elements['m0'] = xt.ParticlesMonitor(num_particles=int(n_particles),
                                 start_at_turn=0, stop_at_turn=1,
                                 auto_to_numpy=True)
 
@@ -218,8 +218,7 @@ def import_particles_from_hdf5(filename, p0c):
         
     return particles
 
-# particles = import_particles_from_hdf5('Data/secondary_particles.h5', ref['p'])
-particles = line.build_particles(x=0,y=0,px=0, py=0)
+particles = import_particles_from_hdf5('Data/secondary_particles.h5', ref['p'])
 pt = particles.get_table()
 
 tt = line.get_table()
