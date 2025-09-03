@@ -70,7 +70,7 @@ line = env.new_line(components=[
     env.place('beampipe'),
     env.new('dd', xt.Bend, length=sizes['dd'][-1], rot_s_rad=-np.pi/2, k0='kd'), # Bx field
     env.place('a_dd'),
-    # env.place('a_m0', at=sizes['m0'][-1]),
+    env.place('a_m0', at=sizes['m0'][-1]),
     env.place('m0', at=sizes['m0'][-1]),
 ])
 
@@ -87,11 +87,12 @@ line.build_tracker()
 # %% ~~~~~~Twiss~~~~~~~~
 init = xt.TwissInit(betx=ref['betx_0'], alfx=ref['alfx_0'], bety=ref['bety_0'], alfy=ref['alfy_0'])  # example values
 
-# tw = line.twiss(
-#     method='4d',
-#     init=init,
-#     end='_end_point',
-# )
+if 'a_m0' not in line.element_names:
+    tw = line.twiss(
+        method='4d',
+        init=init,
+        end='_end_point',
+    )
 
 # Beam size investigation
 def plot_beam_size():
@@ -250,9 +251,9 @@ def track_line(line, particles):
 
         # Track through this single element
         line.track(tracked_particles, ele_start=element_name, num_elements=1)
-        par_to_list = tracked_particles.copy()
-        par_to_list.sort(interleave_lost_particles=True)
-        particle_list.append(par_to_list)
+        p_to_list = tracked_particles.copy()
+        p_to_list.sort(interleave_lost_particles=True)
+        particle_list.append(p_to_list)
 
 
     return particle_list, s_values
@@ -426,14 +427,14 @@ def xy_plot_line(line, particle_list, ele_str, elementNames, n_bin=100):
 
 
 # phase_plot_line(line, particle_list)
-# xy_plot_line(line, particle_list, ele_str='q', elementNames='Quadrupoles', n_bin=300)
-# xy_plot_line(line, particle_list, ele_str='dd', elementNames='Dipoles', n_bin=300)
+xy_plot_line(line, particle_list, ele_str='q', elementNames='Quadrupoles', n_bin=300)
+xy_plot_line(line, particle_list, ele_str='dd', elementNames='Dipoles', n_bin=300)
 print("Finished creating plots of phase planes.")
 # plt.show()
 
 print("Plotted phase planes.")
 
-def plot_trajectories(particle_list, s_values, n_plot=100):
+def plot_trajectories(particle_list, s_values, n_plot=100, show_dead=False):
     x_values = [p.x for p in particle_list]
     y_values = [p.y for p in particle_list]  # shape = (num_elements+1, num_particles)
 
@@ -462,7 +463,7 @@ def plot_trajectories(particle_list, s_values, n_plot=100):
             # If particle survived, use the original blue and red
             axes[0].plot(s_values, x_values[:, idx], 'b-', alpha=0.3, linewidth=0.5)
             axes[1].plot(s_values, y_values[:, idx], 'r-', alpha=0.3, linewidth=0.5)
-        else:
+        elif show_dead:
             # If particle died, use purple for x and yellow for y
             axes[0].plot(s_values[:], x_values[:, idx], 'purple', alpha=0.3, linewidth=0.5)
             axes[1].plot(s_values[:], y_values[:, idx], 'magenta', alpha=0.3, linewidth=0.5)

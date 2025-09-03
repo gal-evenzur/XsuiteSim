@@ -5,8 +5,8 @@ from matplotlib.colors import LogNorm
 import xtrack as xt
 plt.rcParams['image.cmap'] = 'afmhot'
 
-n_particles = 1000
-MagnetSettings = 490.0
+n_particles = 50000
+MagnetSettings = 490
 
 # %% CONSTS________
 u = {
@@ -48,6 +48,7 @@ B_dd_xcorr = 0.026107 # Bx
 B_dd = 0.219 # By
 
 # %% +++++++++Monitor sizes 
+particle_start_pos = 0.3 # m
 npix_x = 1024
 npix_y = 512
 pix_x  = 0.02924
@@ -70,13 +71,13 @@ detector_y_center_cm = 5.165 + 0.1525 + 3.685 + dy_det # cm
 detector_y_center_m  = detector_y_center_cm*u['cm_to_m']
 
 # Calculate detector z position
-detector_z_base_cm = 1363 + 303.2155 + 11.43 + 1.05  # cm
+detector_z_base_cm = 1363 + 303.2155 + 11.43 + 1.05 - particle_start_pos*u['m_to_cm'] # cm
 detector_z_base_m  = detector_z_base_cm*u['cm_to_m']
 detector_z_base_mm = detector_z_base_cm*u['cm_to_mm']
 
 
 sizes = { # min_x, max_x, min_y, max_y in m, start z, stop z, length in m
-    'dr0': [3.6733336],
+    'dr0': [3.6733336-particle_start_pos],
     'q0': [-0.024610, 0.024610, -0.024610, 0.024610, 4.646664-3.6733336],
     'dr0.1': [5.903336-4.646664],
     'q1': [-0.024610, 0.024610, -0.024610, 0.024610, 6.876664-5.903336],
