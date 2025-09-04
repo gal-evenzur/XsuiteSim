@@ -52,7 +52,6 @@ B_dd = 0.219 # By
 zAL     = 0.30 ### the aluminum foil, cm
 zBe     = -0.84 ### the beryllium window, cm
 Z0      = zBe if(MagnetSettings==502) else zAL
-Z0 = 0
 
 # %% +++++++++Monitor sizes 
 npix_x = 1024
