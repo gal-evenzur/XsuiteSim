@@ -1,7 +1,6 @@
 # %% IMPORTS
 import xobjects as xo
 import xtrack as xt
-import xpart as xp
 
 import h5py
 from line_functions import *
@@ -23,8 +22,6 @@ ref = { # All in natural units
 }
 
 
-print(f"ref['p'] = {ref['p']:.5e} eV/c")
-
 env = xt.Environment()
 env['kq_p'] = grad_kG_to_k(Grad1, ref['p'] * u['eV_to_kgms'], ref['q'] * u['e'])  # k1 in 1/m^2
 env['kq_n'] = grad_kG_to_k(Grad2, ref['p'] * u['eV_to_kgms'], ref['q'] * u['e'])  
@@ -43,7 +40,6 @@ env.new('a_m0', xt.LimitRect, min_x=sizes['m0'][0], max_x=sizes['m0'][1], min_y=
 env.elements['m0'] = xt.ParticlesMonitor(num_particles=int(n_particles),
                                 start_at_turn=0, stop_at_turn=1,
                                 auto_to_numpy=True)
-
 
 # Creating Line 
 # Order: drift - beampipe - quadrupole - aperture
@@ -66,12 +62,20 @@ line = env.new_line(components=[
     env.place('a_dd_corr'),
     env.new('drcorr.d', xt.Drift, length=sizes['drcorr.d'][0]),
     env.place('a_dd'),
-    env.new('dd', xt.Bend, length=sizes['dd'][-1], rot_s_rad=-np.pi/2, k0='kd'), # Bx field
+    env.new('dd', xt.Bend, length=sizes['dd'][-1], rot_s_rad=-np.pi/2, k0=env['kd']),
     env.place('a_dd'),
     env.place('a_m0', at=sizes['m0'][-1]),
     env.place('m0', at=sizes['m0'][-1]),
 ])
 
+if use_integration:
+    model = 'mat-kick-mat'
+    # Go through all elements in the line and update the model attribute if it exists
+    for name in line.element_names:
+        element = line[name]
+        if hasattr(element, 'model'):
+            print(f"Updating model for element {name} from {element.model} to {model}")
+            element.model = model
 
 # Need to input in natural units
 line.particle_ref = xt.Particles( 
@@ -195,14 +199,6 @@ def import_particles_from_hdf5(filename, p0c):
     # Get number of particles
     print(f"Loaded {num_particles} particles")
     
-    # Print min/max values to verify data
-    print(f"x range: [{np.min(x_coords):.6f}, {np.max(x_coords):.6f}] m")
-    print(f"y range: [{np.min(y_coords):.6f}, {np.max(y_coords):.6f}] m")
-    print(f"z range: [{np.min(z_coords):.6f}, {np.max(z_coords):.6f}] m")
-    print(f"px range: [{np.min(px):.6f}, {np.max(px):.6f}]")
-    print(f"py range: [{np.min(py):.6f}, {np.max(py):.6f}]")
-    print(f"delta range: [{np.min(delta):.6f}, {np.max(delta):.6f}]")
-
     # Create the particle object for tracking
     particles = line.build_particles(
         x=x_coords,
@@ -217,16 +213,12 @@ def import_particles_from_hdf5(filename, p0c):
     return particles
 
 particles = import_particles_from_hdf5('Data/secondary_particles.h5', ref['p'])
-pt = particles.get_table()
-
 tt = line.get_table()
-print(tt)
 
 def track_line(line, particles):
     # Track particles through each element and plot the divergence
     tt = line.get_table()
     elements_names = [el for el in line.element_names]
-    print(f"Elements in the line: {elements_names}")
 
     # Create a copy of the particles to track
     tracked_particles = particles.copy()
@@ -424,8 +416,8 @@ def xy_plot_line(line, particle_list, ele_str, elementNames, n_bin=100):
 
 
 # phase_plot_line(line, particle_list)
-# xy_plot_line(line, particle_list, ele_str='q', elementNames='Quadrupoles', n_bin=300)
-# xy_plot_line(line, particle_list, ele_str='dd', elementNames='Dipoles', n_bin=300)
+xy_plot_line(line, particle_list, ele_str='q', elementNames='Quadrupoles', n_bin=300)
+xy_plot_line(line, particle_list, ele_str='dd', elementNames='Dipoles', n_bin=300)
 print("Finished creating plots of phase planes.")
 # plt.show()
 
@@ -595,48 +587,79 @@ plot_trajectories(particle_list, s_values, n_plot=190, show_dead=show_dead)
 # %% Monitors!!
 
 
-def plot_monitors(line):
+def plot_monitors(line, ax1=None, fig=None):
 
     m = [el for el in line.elements if isinstance(el, xt.ParticlesMonitor)]
-    
+    if ax1 is None:
+        fig, ax1 = plt.subplots(figsize=(8, 6))
     for i, mon in enumerate(m):
         x, y = np.squeeze(mon.x), np.squeeze(mon.y)
         px, py = np.squeeze(mon.px), np.squeeze(mon.py)
-
+    
         # Filter out dead particles (those with x=y=px=py=0)
         mask = ~((x == 0) & (y == 0) & (px == 0) & (py == 0))
         x_clean = x[mask]
         y_clean = y[mask]
-        px_clean = px[mask]
-        py_clean = py[mask]
 
         print(f"Monitor {i}: {len(x_clean)}/{len(x)} particles alive")
 
         if len(x_clean) > 0:  # Only plot if there are particles
-            fig, (ax1, ax2) = plt.subplots(1, 2, figsize=u['fig_size'])
             
             # XY spatial plot
             h = ax1.hist2d(x_clean, y_clean, bins=(128, 256), cmap='hot')
             ax1.set_xlabel('x [m]')
             ax1.set_ylabel('y [m]')
-            ax1.set_title(f'Spatial distribution (x,y)')
+            ax1.set_title(f'Spatial distribution (x,y)\n m{i} - {len(x_clean)} particles')
+
+            ax1.xaxis.set_minor_locator(AutoMinorLocator(10))
+            ax1.yaxis.set_minor_locator(AutoMinorLocator(10))
+            ax1.grid(True,linewidth=0.25)
+
             fig.colorbar(h[3], ax=ax1)
             
-            # Divergence plot
-            h = ax2.hist2d(px_clean, py_clean, bins=(128, 256), cmap='hot')
-            ax2.set_xlabel('px/p0')
-            ax2.set_ylabel('py/p0')
-            ax2.set_title(f'Angular distribution (px/p0, py/p0)')
-            fig.colorbar(h[3], ax=ax2)
-            
-            plt.suptitle(f'Monitor m{i} at s = {np.squeeze(mon.s[0]):.2f} m - {len(x_clean)} particles')
+            plt.suptitle(f'Monitor plot for run {MagnetSettings}', fontsize=16)
             plt.tight_layout()
         else:
             print(f"No particles alive at monitor {i}")
         
-        # plot_histogram(x, y, bins=(128, 256), title=f'Monitor m{i} at s = {np.squeeze(mon.s[0]):.2f} m')
+
+def test_integration_models(line, particles):
+    """
+    Test the effect of different integration models on particle tracking.
+    Compare results using 'adaptive' integration model vs simple matrix model.
+    """
+    line_integration = line.copy()
+
+    model = 'mat-kick-mat'
+    # Go through all elements in the line and update the model attribute if it exists
+    for name in line.element_names:
+        element = line[name]
+        if hasattr(element, 'model'):
+            element.model = model
+    line_integration.build_tracker()
+    track_line(line_integration, particles)
+
+    line_no_integ = line.copy()
+    model = 'adaptive'
+    # Go through all elements in the line and update the model attribute if it exists
+    for name in line_no_integ.element_names:
+        element = line_no_integ[name]
+        if hasattr(element, 'model'):
+            element.model = model
+        
+
+    line_no_integ.build_tracker()
+    track_line(line_no_integ, particles)
+
+    fig, axes = plt.subplots(1, 2, figsize=u['fig_size'], sharey=True, sharex=True)
+
+    plot_monitors(line, axes[0], fig)
+    plot_monitors(line_no_integ, axes[1], fig)
+    axes[0].set_title("With integration model")
+    axes[1].set_title("With simple matrix model")
 
 
+    
 plot_monitors(line)
-
+# test_integration_models(line, particles)
 plt.show()

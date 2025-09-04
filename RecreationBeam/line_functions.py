@@ -5,9 +5,10 @@ from matplotlib.colors import LogNorm
 import xtrack as xt
 plt.rcParams['image.cmap'] = 'afmhot'
 
-n_particles = 5e4
+n_particles = 3e5
 MagnetSettings = 490
 show_dead = True
+use_integration = True
 
 # %% CONSTS________
 u = {
@@ -51,7 +52,7 @@ B_dd = 0.219 # By
 zAL     = 0.30 ### the aluminum foil, cm
 zBe     = -0.84 ### the beryllium window, cm
 Z0      = zBe if(MagnetSettings==502) else zAL
-
+Z0 = 0
 
 # %% +++++++++Monitor sizes 
 npix_x = 1024
@@ -89,7 +90,7 @@ sizes = { # min_x, max_x, min_y, max_y in m, start z, stop z, length in m
     'q1': [-0.024610, 0.024610, -0.024610, 0.024610, 6.876664-5.903336],
     'dr1.2': [8.123336-6.876664],
     'q2': [-0.024610, 0.024610, -0.024610, 0.024610, 9.096664-8.123336],
-    'dr2.corr': [10.1115-9.096664],
+    'dr2.corr': [9.87779-9.096664],
     'corr': [-0.1795, 0.1795, -0.047, 0.047, 10.1115 - 9.87779],
     'drcorr.d': [12.6034-10.1115],
     'dd': [-0.022352, 0.02352, -0.063752, 0.031752, 13.5178-12.6034],
@@ -105,7 +106,6 @@ sizes = { # min_x, max_x, min_y, max_y in m, start z, stop z, length in m
 def p_from_E(E, E_rest):
     # m is in eV / c2
     # E_rest = m * c2
-    print("E rest = ", E_rest)
     # E is in eV
     # p is in eV / c
     p = (E**2 - (E_rest)**2)**0.5 #p is in eV/c

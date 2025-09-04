@@ -548,7 +548,27 @@ elements = magnets + [beampipe] + detectors
 #             "detector":[diploe.z_max,ZMAX],
 #            }
 
+# Print element positions and dimensions
+print("\nElement Positions and Dimensions:")
+print("-" * 80)
+print(f"{'Element':<15} {'Z Start (m)':<15} {'Z End (m)':<15} {'X Min (m)':<15} {'X Max (m)':<15} {'Y Min (m)':<15} {'Y Max (m)':<15}")
+print("-" * 80)
 
+for element in elements:
+    name = ""
+    if element == quad0: name = "Quad0"
+    elif element == quad1: name = "Quad1"
+    elif element == quad2: name = "Quad2"
+    elif element == xcorr: name = "XCorr"
+    elif element == dipole: name = "Dipole"
+    elif element == beampipe: name = "Beampipe"
+    elif element in detectors: 
+        det_idx = detectors.index(element)
+        name = f"Detector {det_idx}"
+    
+    print(f"{name:<15} {element.z_min:<15.6f} {element.z_max:<15.6f} {element.x_min:<15.6f} {element.x_max:<15.6f} {element.y_min:<15.6f} {element.y_max:<15.6f}")
+
+print("-" * 80)
 
 
 ########################################################################
@@ -1627,10 +1647,6 @@ if __name__ == "__main__":
     
     
     
-    
-    
-    
-    
     ## example how to get the x,y at any point along the trajectory
     ### plot the initial position from the solution directly
     z_target = Z0_m ### Be window or Al foil
@@ -1718,8 +1734,6 @@ if __name__ == "__main__":
     
     
     
-    
-    
     z_target = quad0.z_min-0.001 ### 
     XX = []
     YY = []
@@ -1756,11 +1770,6 @@ if __name__ == "__main__":
     plt.tight_layout()
     plt.savefig(f"{pdfname}_divergence_at_quad0zmin_from_initstate.pdf")
     if(doshw): plt.show()
-    
-    
-    
-    
-    
     
     
     
