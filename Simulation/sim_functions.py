@@ -90,6 +90,12 @@ def quadElement(env, spacer, name, k1, length, max_x, max_y, r_pipe,
              max_x=max_x, max_y=max_y, a=r_pipe, b=r_pipe)
     
     qElement = env.new_line(components=[
+        env.new(f"rots_{name}", xt.SRotation, angle=ang_z),
+        spacer,
+        env.new(f"rotx_{name}", xt.XRotation, angle=ang_x),
+        spacer,
+        env.new(f"roty_{name}", xt.YRotation, angle=ang_y),
+        spacer,
         env.new(f'xy_{name}', xt.XYShift, dx=-dx, dy=-dy),
         spacer,
         f'a_{name}',
@@ -97,6 +103,12 @@ def quadElement(env, spacer, name, k1, length, max_x, max_y, r_pipe,
         f'a_{name}',
         spacer,
         env.new(f'xy_restore_{name}', xt.XYShift, dx=dx, dy=dy),
+        spacer,
+        env.new(f"roty_restore_{name}", xt.YRotation, angle=-ang_y),
+        spacer,
+        env.new(f"rotx_restore_{name}", xt.XRotation, angle=-ang_x),
+        spacer,
+        env.new(f"rots_restore_{name}", xt.SRotation, angle=-ang_z),
     ])
 
     return qElement
@@ -106,30 +118,43 @@ def dipoleElement(env, spacer, name, k0, length, max_x, max_y, r_pipe,
                   dx=0, dy=0, ang_z=0, ang_x=0, ang_y=0):
     env.new(f'a_{name}', xt.LimitRectEllipse,
              max_x=max_x, max_y=max_y, a=r_pipe, b=r_pipe)
-    
-    if name=='dd':
+    env.new(f'a_{name}_out', xt.LimitRect, min_x=min_x, max_x=max_x, min_y=min_y, max_y=max_y),
+
+    def dip(a_in, a_out):
         dElement = env.new_line(components=[
+            env.new(f"rots_{name}", xt.SRotation, angle=ang_z),
+            spacer,
+            env.new(f"rotx_{name}", xt.XRotation, angle=ang_x),
+            spacer,
+            env.new(f"roty_{name}", xt.YRotation, angle=ang_y),
+            spacer,
             env.new(f'xy_{name}', xt.XYShift, dx=-dx, dy=-dy),
             spacer,
-            f'a_{name}',
-            env.new(name, xt.Bend, length=length, k0=k0, rot_s_rad=-np.pi/2),
-            env.new(f'a_{name}_out', xt.LimitRect, min_x=min_x, max_x=max_x, min_y=min_y, max_y=max_y),
+            a_in,
+            env.new(name, xt.Bend, length=length, k0=k0),
+            a_out,
             spacer,
             env.new(f'xy_restore_{name}', xt.XYShift, dx=dx, dy=dy),
-        ])
+            spacer,
+            env.new(f"roty_restore_{name}", xt.YRotation, angle=-ang_y),
+            spacer,
+            env.new(f"rotx_restore_{name}", xt.XRotation, angle=-ang_x),
+            spacer,
+            env.new(f"rots_restore_{name}", xt.SRotation, angle=-ang_z),
+            ])
+        
+        return dElement
+
+
+    if name=='dd': 
+        dElement = dip(f'a_{name}', f'a_{name}_out')
+        dElement[name].rot_s_rad = -np.pi/2  # to have Bx field
     
     else:
-        dElement = env.new_line(components=[
-            env.new(f'xy_{name}', xt.XYShift, dx=-dx, dy=-dy),
-            spacer,
-            f'a_{name}',
-            env.new(name, xt.Bend, length=length, k0=k0),
-            f'a_{name}',
-            spacer,
-            env.new(f'xy_restore_{name}', xt.XYShift, dx=dx, dy=dy),
-        ])
+        dElement = dip(f'a_{name}', f'a_{name}')
 
-
+    
+    
     return dElement
 
 def line_init(shifts):
@@ -154,28 +179,33 @@ def line_init(shifts):
         env.new('dr0', xt.Drift, length=sizes['dr0'][0]),
         quadElement(env, spacer, 'q0', k1='kq_p', length=sizes['q0'][-1],
                      max_x=sizes['q0'][1], max_y=sizes['q0'][3], r_pipe=sizes['pipe'],
-                     dx=shifts['q0']['x'], dy=shifts['q0']['y']),
+                     dx=shifts['q0']['x'], dy=shifts['q0']['y'],
+                     ang_z=shifts['q0']['ang_z'], ang_x=shifts['q0']['ang_x'], ang_y=shifts['q0']['ang_y']),
 
         env.new('dr0.1', xt.Drift, length=sizes['dr0.1'][0]),
         quadElement(env, spacer, 'q1', k1='kq_n', length=sizes['q1'][-1],
                      max_x=sizes['q1'][1], max_y=sizes['q1'][3], r_pipe=sizes['pipe'],
-                     dx=shifts['q1']['x'], dy=shifts['q1']['y']),
+                     dx=shifts['q1']['x'], dy=shifts['q1']['y'],
+                     ang_z=shifts['q1']['ang_z'], ang_x=shifts['q1']['ang_x'], ang_y=shifts['q1']['ang_y']),
 
         env.new('dr1.2', xt.Drift, length=sizes['dr1.2'][0]),
         quadElement(env, spacer, 'q2', k1='kq_p', length=sizes['q2'][-1],
                      max_x=sizes['q2'][1], max_y=sizes['q2'][3], r_pipe=sizes['pipe'],
-                     dx=shifts['q2']['x'], dy=shifts['q2']['y']),
+                     dx=shifts['q2']['x'], dy=shifts['q2']['y'],
+                     ang_z=shifts['q2']['ang_z'], ang_x=shifts['q2']['ang_x'], ang_y=shifts['q2']['ang_y']),
 
         env.new('dr2.corr', xt.Drift, length=sizes['dr2.corr'][0]),
         dipoleElement(env, spacer, 'dd_corr', k0='kd_corr', length=sizes['corr'][-1],
                      max_x=sizes['corr'][1], max_y=sizes['corr'][3], r_pipe=sizes['pipe'],
-                     dx=shifts['dd_corr']['x'], dy=shifts['dd_corr']['y']),
+                     dx=shifts['dd_corr']['x'], dy=shifts['dd_corr']['y'],
+                     ang_z=shifts['dd_corr']['ang_z'], ang_x=shifts['dd_corr']['ang_x'], ang_y=shifts['dd_corr']['ang_y']),
         
         env.new('drcorr.d', xt.Drift, length=sizes['drcorr.d'][0]),
         dipoleElement(env, spacer, 'dd', k0='kd', length=sizes['dd'][-1],
                      min_x=sizes['dd'][0], min_y=sizes['dd'][2],
                      max_x=sizes['dd'][1], max_y=sizes['dd'][3], r_pipe=sizes['pipe'],
-                     dx=shifts['dd']['x'], dy=shifts['dd']['y']),
+                     dx=shifts['dd']['x'], dy=shifts['dd']['y'],
+                     ang_z=shifts['dd']['ang_z'], ang_x=shifts['dd']['ang_x'], ang_y=shifts['dd']['ang_y']),
         
         env.place('a_m0', at=sizes['m0'][-1]),
         env.place('m0', at=sizes['m0'][-1]),
