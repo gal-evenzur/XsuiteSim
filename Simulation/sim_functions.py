@@ -17,7 +17,7 @@ chipXcm = chipXmm*u['mm_to_cm']
 chipYcm = chipYmm*u['mm_to_cm']
 chipXm  = chipXmm*u['mm_to_m']
 chipYm  = chipYmm*u['mm_to_m']
-dy_det  = 0.35 # cm
+dy_det  = 0 # cm
 
 particle_start_pos = Z0 # m
 # Define detector x range
@@ -84,6 +84,54 @@ def B_T_to_k(B_T, p_mks, q_mks):
 
 # %% RUNNIN LINE---------------------
 
+def quadElement(env, spacer, name, k1, length, max_x, max_y, r_pipe, 
+                dx=0, dy=0, ang_z=0, ang_x=0, ang_y=0):
+    env.new(f'a_{name}', xt.LimitRectEllipse,
+             max_x=max_x, max_y=max_y, a=r_pipe, b=r_pipe)
+    
+    qElement = env.new_line(components=[
+        env.new(f'xy_{name}', xt.XYShift, dx=-dx, dy=-dy),
+        spacer,
+        f'a_{name}',
+        env.new(name, xt.Quadrupole, length=length, k1=k1),
+        f'a_{name}',
+        spacer,
+        env.new(f'xy_restore_{name}', xt.XYShift, dx=dx, dy=dy),
+    ])
+
+    return qElement
+
+def dipoleElement(env, spacer, name, k0, length, max_x, max_y, r_pipe,
+                  min_x=0, min_y=0, 
+                  dx=0, dy=0, ang_z=0, ang_x=0, ang_y=0):
+    env.new(f'a_{name}', xt.LimitRectEllipse,
+             max_x=max_x, max_y=max_y, a=r_pipe, b=r_pipe)
+    
+    if name=='dd':
+        dElement = env.new_line(components=[
+            env.new(f'xy_{name}', xt.XYShift, dx=-dx, dy=-dy),
+            spacer,
+            f'a_{name}',
+            env.new(name, xt.Bend, length=length, k0=k0, rot_s_rad=-np.pi/2),
+            env.new(f'a_{name}_out', xt.LimitRect, min_x=min_x, max_x=max_x, min_y=min_y, max_y=max_y),
+            spacer,
+            env.new(f'xy_restore_{name}', xt.XYShift, dx=dx, dy=dy),
+        ])
+    
+    else:
+        dElement = env.new_line(components=[
+            env.new(f'xy_{name}', xt.XYShift, dx=-dx, dy=-dy),
+            spacer,
+            f'a_{name}',
+            env.new(name, xt.Bend, length=length, k0=k0),
+            f'a_{name}',
+            spacer,
+            env.new(f'xy_restore_{name}', xt.XYShift, dx=dx, dy=dy),
+        ])
+
+
+    return dElement
+
 def line_init(shifts):
 
     env = xt.Environment()
@@ -92,11 +140,6 @@ def line_init(shifts):
     env['kd'] = B_T_to_k(B_dd, ref['p'] * u['eV_to_kgms'], ref['q'] * u['e'])  # k0 in 1/m , Bx --> +yhat
     env['kd_corr'] = B_T_to_k(B_dd_xcorr, ref['p'] * u['eV_to_kgms'], ref['q'] * u['e']) # By --> -xhat
 
-    env.new('a_q0', xt.LimitRectEllipse, max_x=sizes['q0'][1], max_y=sizes['q0'][3], a=sizes['pipe'], b=sizes['pipe']),
-    env.new('a_q1', xt.LimitRectEllipse, max_x=sizes['q1'][1], max_y=sizes['q1'][3], a=sizes['pipe'], b=sizes['pipe']),
-    env.new('a_q2', xt.LimitRectEllipse, max_x=sizes['q2'][1], max_y=sizes['q2'][3], a=sizes['pipe'], b=sizes['pipe']),
-    env.new('a_dd_corr', xt.LimitRectEllipse, max_x=sizes['corr'][1], max_y=sizes['corr'][3], a=sizes['pipe'], b=sizes['pipe']),
-    env.new('a_dd', xt.LimitRectEllipse, max_x=sizes['dd'][1], max_y=sizes['dd'][3], a=sizes['pipe'], b=sizes['pipe']),
 
     # Monitor at the end
     env.new('a_m0', xt.LimitRect, min_x=sizes['m0'][0], max_x=sizes['m0'][1], min_y=sizes['m0'][2], max_y=sizes['m0'][3]),
@@ -104,34 +147,36 @@ def line_init(shifts):
                                     start_at_turn=0, stop_at_turn=1,
                                     auto_to_numpy=True)
 
-    env.new('xy_center', xt.XYShift, dx=-shifts['q0']['x'], dy=-shifts['q0']['y'])
-    env.new('zero_drift', xt.Drift, length=1e-6)
+    spacer = env.new('spacer', xt.Drift, length=1e-6)
     # Creating Line 
     # Order: drift - beampipe - quadrupole - aperture
     line = env.new_line(components=[
         env.new('dr0', xt.Drift, length=sizes['dr0'][0]),
-        env.new('s_q0_xy', xt.XYShift, dx=shifts['q0']['x'], dy=shifts['q0']['y']),
-        env.place('a_q0'),
-        env.new('q0', xt.Quadrupole, length=sizes['q0'][-1], k1='kq_p'),
-        env.place('a_q0'),
-        env.place('zero_drift'),
-        env.place('xy_center'),
+        quadElement(env, spacer, 'q0', k1='kq_p', length=sizes['q0'][-1],
+                     max_x=sizes['q0'][1], max_y=sizes['q0'][3], r_pipe=sizes['pipe'],
+                     dx=shifts['q0']['x'], dy=shifts['q0']['y']),
+
         env.new('dr0.1', xt.Drift, length=sizes['dr0.1'][0]),
-        env.place('a_q1'),
-        env.new('q1', xt.Quadrupole, length=sizes['q1'][-1], k1='kq_n'),
-        env.place('a_q1'),
+        quadElement(env, spacer, 'q1', k1='kq_n', length=sizes['q1'][-1],
+                     max_x=sizes['q1'][1], max_y=sizes['q1'][3], r_pipe=sizes['pipe'],
+                     dx=shifts['q1']['x'], dy=shifts['q1']['y']),
+
         env.new('dr1.2', xt.Drift, length=sizes['dr1.2'][0]),
-        env.place('a_q2'),
-        env.new('q2', xt.Quadrupole, length=sizes['q2'][-1], k1='kq_p'),
-        env.place('a_q2'),
+        quadElement(env, spacer, 'q2', k1='kq_p', length=sizes['q2'][-1],
+                     max_x=sizes['q2'][1], max_y=sizes['q2'][3], r_pipe=sizes['pipe'],
+                     dx=shifts['q2']['x'], dy=shifts['q2']['y']),
+
         env.new('dr2.corr', xt.Drift, length=sizes['dr2.corr'][0]),
-        env.place('a_dd_corr'),
-        env.new('dd_corr', xt.Bend, length=sizes['corr'][-1],k0 ='kd_corr'), # creates By field
-        env.place('a_dd_corr'),
+        dipoleElement(env, spacer, 'dd_corr', k0='kd_corr', length=sizes['corr'][-1],
+                     max_x=sizes['corr'][1], max_y=sizes['corr'][3], r_pipe=sizes['pipe'],
+                     dx=shifts['dd_corr']['x'], dy=shifts['dd_corr']['y']),
+        
         env.new('drcorr.d', xt.Drift, length=sizes['drcorr.d'][0]),
-        env.place('a_dd'),
-        env.new('dd', xt.Bend, length=sizes['dd'][-1], rot_s_rad=-np.pi/2, k0=env['kd']),
-        env.place('a_dd'),
+        dipoleElement(env, spacer, 'dd', k0='kd', length=sizes['dd'][-1],
+                     min_x=sizes['dd'][0], min_y=sizes['dd'][2],
+                     max_x=sizes['dd'][1], max_y=sizes['dd'][3], r_pipe=sizes['pipe'],
+                     dx=shifts['dd']['x'], dy=shifts['dd']['y']),
+        
         env.place('a_m0', at=sizes['m0'][-1]),
         env.place('m0', at=sizes['m0'][-1]),
     ])
