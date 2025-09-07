@@ -104,13 +104,18 @@ def line_init(shifts):
                                     start_at_turn=0, stop_at_turn=1,
                                     auto_to_numpy=True)
 
+    env.new('xy_center', xt.XYShift, dx=-shifts['q0']['x'], dy=-shifts['q0']['y'])
+    env.new('zero_drift', xt.Drift, length=1e-6)
     # Creating Line 
     # Order: drift - beampipe - quadrupole - aperture
     line = env.new_line(components=[
         env.new('dr0', xt.Drift, length=sizes['dr0'][0]),
+        env.new('s_q0_xy', xt.XYShift, dx=shifts['q0']['x'], dy=shifts['q0']['y']),
         env.place('a_q0'),
         env.new('q0', xt.Quadrupole, length=sizes['q0'][-1], k1='kq_p'),
         env.place('a_q0'),
+        env.place('zero_drift'),
+        env.place('xy_center'),
         env.new('dr0.1', xt.Drift, length=sizes['dr0.1'][0]),
         env.place('a_q1'),
         env.new('q1', xt.Quadrupole, length=sizes['q1'][-1], k1='kq_n'),
