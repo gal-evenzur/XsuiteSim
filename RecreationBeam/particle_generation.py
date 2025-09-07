@@ -4,14 +4,14 @@ from matplotlib.ticker import AutoMinorLocator
 
 from matplotlib.animation import FuncAnimation, PillowWriter
 import h5py
-from line_functions import n_particles
+from line_functions import n_particles, MagnetSettings
 dogif = False
 
 plt.rcParams['image.cmap'] = 'afmhot'
 # plt.rcParams['image.cmap'] = 'copper'
 plt.rcParams['text.usetex'] = True
 
-MagnetsSettings = 490
+MagnetsSettings = MagnetSettings
 mltprc = True
 doshw  = True
 dogif = False
@@ -170,6 +170,7 @@ def simulate_secondary_production(primary_state,q=+1,Emin=0.5,Emax=5,smear_T=Fal
     secondary_state = [x,y,z, px,py,pz, mass, q]
     return secondary_state
 
+
 def state_GeV_to_kgms(state):
     state_mks = [0]*len(state)
     state_mks[0] = state[0]
@@ -320,7 +321,7 @@ def plot_2h(states1,states2):
     ymin *= 1.2 if(ymin<0) else 0.8
     ymax *= 1.2
     zmin *= 1.2 if(zmin<0) else 0.8
-    zmax *= 1.2
+    zmax *= 1.2 if(zmax<0) else 0.8
 
     pxmin = min(min(px1),min(px2))
     pxmax = max(max(px1),max(px2))
@@ -432,7 +433,6 @@ def plot_2h(states1,states2):
 ###############################################################
 ###############################################################
 
-
 states = []
 for i in range(int(n_particles)):
     ### particle species
@@ -478,7 +478,7 @@ print(f"Plotting positrons at z=30 cm")
 primary_states_at_foil = []
 secondary_states_at_foil = []
 for state in states:
-    primary_state_at_foil = propagate_state_in_vacuum_to_z(state,0.3)
+    primary_state_at_foil = propagate_state_in_vacuum_to_z(state,Z0_m)
     primary_states_at_foil.append(primary_state_at_foil)
     secondary_state_at_foil = simulate_secondary_production(primary_state_at_foil,q=+1,Emin=0.5,Emax=5,smear_T=True,smear_pT=True)
     secondary_states_at_foil.append(secondary_state_at_foil)
@@ -521,9 +521,7 @@ plt.tight_layout()
 
 
 ### plot the differences in x,y,px,py
-plot_2h(primary_states_at_foil,secondary_states_at_foil)
-
-plt.show()
+# plot_2h(primary_states_at_foil,secondary_states_at_foil)
 
 
 ### Save particle states to HDF5 file
@@ -586,3 +584,6 @@ def save_particles_to_hdf5(states, filename):
 
 # Save secondary particles at foil
 save_particles_to_hdf5(secondary_states_at_foil, 'Data/secondary_particles.h5')
+
+plt.show()
+

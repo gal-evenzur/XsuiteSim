@@ -40,10 +40,10 @@ dogif   = True if(argus.gif is not None and argus.gif=="1") else False
 '''
 
 
-Nparticles = 1000
-MagnetsSettings = 502
+Nparticles = int(3e4)
+MagnetsSettings = 490.1
 mltprc = True
-doshw  = True
+doshw  = False
 dogif = False
 fullacc = False
 

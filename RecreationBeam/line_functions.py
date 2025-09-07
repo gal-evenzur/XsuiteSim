@@ -6,7 +6,7 @@ import xtrack as xt
 plt.rcParams['image.cmap'] = 'afmhot'
 
 n_particles = 3e5
-MagnetSettings = 490
+MagnetSettings = 490.1
 show_dead = True
 use_integration = True
 
@@ -64,7 +64,7 @@ chipXcm = chipXmm*u['mm_to_cm']
 chipYcm = chipYmm*u['mm_to_cm']
 chipXm  = chipXmm*u['mm_to_m']
 chipYm  = chipYmm*u['mm_to_m']
-dy_det  = 0.35 # cm
+dy_det  = 0 # cm
 
 particle_start_pos = Z0 # m
 # Define detector x range
