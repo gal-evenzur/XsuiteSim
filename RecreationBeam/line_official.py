@@ -62,8 +62,11 @@ line = env.new_line(components=[
     env.place('a_dd_corr'),
     env.new('drcorr.d', xt.Drift, length=sizes['drcorr.d'][0]),
     env.place('a_dd'),
+<<<<<<< HEAD
     env.new('dd', xt.Bend, length=sizes['dd'][-1], rot_s_rad=-np.pi/2, k0=env['kd']),
     env.place('a_dd'),
+=======
+>>>>>>> a41f9fc (working line with working plotting)
     env.place('a_m0', at=sizes['m0'][-1]),
     env.place('m0', at=sizes['m0'][-1]),
 ])
@@ -423,7 +426,11 @@ print("Finished creating plots of phase planes.")
 
 print("Plotted phase planes.")
 
+<<<<<<< HEAD
 def plot_trajectories(particle_list, s_values, n_plot=100, show_dead=False, limit_line_width=2, limit_line_length=0.1):
+=======
+def plot_trajectories(particle_list, s_values, n_plot=100, show_dead=False):
+>>>>>>> a41f9fc (working line with working plotting)
     x_values = [p.x for p in particle_list]
     y_values = [p.y for p in particle_list]  # shape = (num_elements+1, num_particles)
 
