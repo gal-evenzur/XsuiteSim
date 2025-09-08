@@ -7,7 +7,7 @@ from line_functions import *
 
 plt.rcParams['image.cmap'] = 'afmhot'
 # plt.rcParams['image.cmap'] = 'copper'
-# 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
+
 
 ctx = xo.ContextCpu()  # Use xo.ContextCupy() for GPU
 
