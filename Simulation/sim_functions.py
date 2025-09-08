@@ -17,7 +17,7 @@ chipXcm = chipXmm*u['mm_to_cm']
 chipYcm = chipYmm*u['mm_to_cm']
 chipXm  = chipXmm*u['mm_to_m']
 chipYm  = chipYmm*u['mm_to_m']
-dy_det  = 0 # cm
+dy_det  = 0.35 # cm
 
 particle_start_pos = Z0 # m
 # Define detector x range
@@ -383,8 +383,6 @@ def test_integration_models(line, particles):
     axes[1].set_title("With simple matrix model")
 
 
-
-
 # %% {PLotting {} FUNCTIONS}
 def twiss_plot(line, ref):
     init = xt.TwissInit(betx=ref['betx_0'], alfx=ref['alfx_0'], bety=ref['bety_0'], alfy=ref['alfy_0'])  # example values
@@ -471,9 +469,10 @@ def track_line(line, particles):
     tracked_particles = particles.copy()
     # Initialize data structures to store particle coordinates
 
-    s_values = [0.0]
-
-    particle_list = [tracked_particles.copy()]
+    particle_dir = {'p': [tracked_particles.copy()], 
+                     's': [0.0],
+                     'names': ['start']
+                    }
 
     # Track through each element individually
     for i, element_name in enumerate(elements_names):
@@ -487,13 +486,15 @@ def track_line(line, particles):
         # Track through this single element
         line.track(tracked_particles, ele_start=element_name, num_elements=1)
         if "a_" in element_name or "m" in element_name:
-            s_values.append(s_stop)
             p_to_list = tracked_particles.copy()
             p_to_list.sort(interleave_lost_particles=True)
-            particle_list.append(p_to_list)
+
+            particle_dir['p'].append(p_to_list)
+            particle_dir['s'].append(s_stop)
+            particle_dir['names'].append(element_name)
 
 
-    return particle_list, s_values
+    return particle_dir
 
 
 def plot_histogram(x, y, bins, title=""):
@@ -548,9 +549,13 @@ def particle_lost_at_step(particle_list):
     return particle_lost_at
 
 
-def plot_trajectories(particle_list, line, s_values, n_plot=100, show_dead=False, limit_line_width=2, limit_line_length=0.1):
+def plot_trajectories(particle_dir, line, n_plot=100, show_dead=False, limit_line_width=2, limit_line_length=0.1):
+    particle_list = particle_dir['p']
+    s_values = particle_dir['s']
+    plot_names = particle_dir['names']
     particles = particle_list[0]
     tt = line.get_table()
+
 
     x_values = [p.x for p in particle_list]
     y_values = [p.y for p in particle_list]  # shape = (num_elements+1, num_particles)
@@ -589,6 +594,18 @@ def plot_trajectories(particle_list, line, s_values, n_plot=100, show_dead=False
             axes[0].scatter(s_values[loss_step], x_values[loss_step, idx], color='k', s=9, alpha=0.7)
             axes[1].scatter(s_values[loss_step], y_values[loss_step, idx], color='k', s=9, alpha=0.7)
 
+    # Set titles, grid and auto minor locators
+    axes[0].set_title('X Trajectories')
+    axes[1].set_title('Y Trajectories')
+    
+    for ax in axes:
+        ax.set_xlabel('s [m]')
+        ax.grid(True, linewidth=0.5, alpha=0.5)
+        ax.xaxis.set_minor_locator(AutoMinorLocator(10))
+        ax.yaxis.set_minor_locator(AutoMinorLocator(10))
+    
+    axes[0].set_ylabel('x [m]')
+    axes[1].set_ylabel('y [m]')
     alive_particles = []
     for p in particle_list:
         alive_particles.append(p.filter(final_alive))
@@ -814,18 +831,21 @@ def phase_plot_line(line, particle_list):
     
 
 
-def xy_plot_line(line, particle_list, ele_str, elementNames, n_bin=100):
+def xy_plot_line(line, particle_dir, ele_str, elementNames, n_bin=100):
     """
     Generate XY plots for quadrupoles in the beam line.
     For each quadrupole, create a figure showing the XY distribution 
     at both the entrance (before quad) and exit (after quad).
     """
     # Get all element names in the line
-    element_names = line.element_names
+    particle_list = particle_dir['p']
+    s_values = particle_dir['s']
+    tracked_elements = particle_dir['names']
     
+    element_names = line.element_names
     # Identify all quadrupoles in the line
     plot_elements = [name for name in element_names if name.startswith(ele_str)]
-    print("...Plotting XY pictures for plotted elements...")
+    print(f"...Plotting XY pictures for {elementNames}...")
     
     alive_particles = []
     for p in particle_list:
@@ -836,33 +856,49 @@ def xy_plot_line(line, particle_list, ele_str, elementNames, n_bin=100):
                              sharex=True, sharey=True, tight_layout=True)
     fig.suptitle(f"XY Distribution at {elementNames} Entrances and Exits", fontsize=16)
     
-    for i, ele_names in enumerate(plot_elements):
-
-        # Find the quadrupole index in the element_names list
-        ele_idx = element_names.index(ele_names)
+    for i, ele_name in enumerate(plot_elements):
+        # Find the entrance and exit indices from tracked_elements
+        entrance_idx = None
+        exit_idx = None
         
-        # Get particles at entrance (element before ele) and exit (after ele)
-        entrance_particles = alive_particles[ele_idx]  # Before the ele
-        exit_particles = alive_particles[ele_idx+2]    # After the aperture of the ele
-
+        # Look for the "a_" + ele_str elements in tracked_elements
+        for j, tracked_name in enumerate(tracked_elements):
+            if f'a_{ele_name}' == tracked_name or f'a_{ele_name}_out' == tracked_name:
+                if entrance_idx is None:
+                    entrance_idx = j
+                else:
+                    exit_idx = j
+                    break
+        
+        if entrance_idx is None or exit_idx is None:
+            print(f"Warning: Could not find both entrance and exit for {ele_name}")
+            continue
+            
+        # Get particles at entrance and exit
+        entrance_particles = alive_particles[entrance_idx]
+        exit_particles = alive_particles[exit_idx]
+        
         # Plot entrance distribution (top row)
         h, _, _, im = axs[0, i].hist2d(entrance_particles.x, entrance_particles.y, 
                                      bins=(n_bin, n_bin), rasterized=True)
-        axs[0, i].set_title(f"{ele_names} entrance")
+        axs[0, i].set_title(f"{ele_name} entrance\n elem: {tracked_elements[entrance_idx]}")
         axs[0, i].set_xlabel('x [m]')
         axs[0, i].set_ylabel('y [m]')
-        # axs[0, i].grid(True, linewidth=0.25, alpha=0.25)
+        axs[0, i].grid(True, linewidth=0.5, alpha=0.5)
+        axs[0, i].xaxis.set_minor_locator(AutoMinorLocator(10))
+        axs[0, i].yaxis.set_minor_locator(AutoMinorLocator(10))
         fig.colorbar(im, ax=axs[0, i])
         
         # Plot exit distribution (bottom row)
         h, _, _, im = axs[1, i].hist2d(exit_particles.x, exit_particles.y, 
-                                     bins=(n_bin, n_bin), rasterized=True)
-        axs[1, i].set_title(f"{ele_names} exit")
+                         bins=(n_bin, n_bin), rasterized=True)
+        axs[1, i].set_title(f"{ele_name} exit\n elem: {tracked_elements[exit_idx]}")
         axs[1, i].set_xlabel('x [m]')
         axs[1, i].set_ylabel('y [m]')
-        # axs[1, i].grid(True, linewidth=0.25, alpha=0.25)
+        axs[1, i].grid(True, linewidth=0.5, alpha=0.5)
+        axs[1, i].xaxis.set_minor_locator(AutoMinorLocator(10))
+        axs[1, i].yaxis.set_minor_locator(AutoMinorLocator(10))
         fig.colorbar(im, ax=axs[1, i])
-    
     plt.tight_layout()
     plt.subplots_adjust(top=0.92)
     

@@ -55,8 +55,8 @@ magsetdelt = {"quad0":[0,0], "quad1":[0,0], "quad2":[0,0], "xcorr":[0,0], "dipol
 Grad1 = magsetvals[MagnetSettings][0]
 Grad2 = magsetvals[MagnetSettings][1]
 
-B_dd_xcorr = 0.026107 # Bx 
-B_dd = 0.219 # By
+B_dd_xcorr = 0.026107 # By
+B_dd = 0.219 # Bx
 
 zAL     = 0.30 ### the aluminum foil, cm
 zBe     = -0.84 ### the beryllium window, cm
