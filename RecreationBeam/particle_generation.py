@@ -11,7 +11,11 @@ plt.rcParams['image.cmap'] = 'afmhot'
 # plt.rcParams['image.cmap'] = 'copper'
 plt.rcParams['text.usetex'] = True
 
+<<<<<<< HEAD
 MagnetsSettings = MagnetSettings
+=======
+MagnetsSettings = 490
+>>>>>>> 96d1695 (Stabe version, everything in sim works)
 mltprc = True
 doshw  = True
 dogif = False

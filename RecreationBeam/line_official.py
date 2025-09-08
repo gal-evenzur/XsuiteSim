@@ -62,11 +62,8 @@ line = env.new_line(components=[
     env.place('a_dd_corr'),
     env.new('drcorr.d', xt.Drift, length=sizes['drcorr.d'][0]),
     env.place('a_dd'),
-<<<<<<< HEAD
     env.new('dd', xt.Bend, length=sizes['dd'][-1], rot_s_rad=-np.pi/2, k0=env['kd']),
     env.place('a_dd'),
-=======
->>>>>>> a41f9fc (working line with working plotting)
     env.place('a_m0', at=sizes['m0'][-1]),
     env.place('m0', at=sizes['m0'][-1]),
 ])
@@ -92,12 +89,11 @@ line.build_tracker()
 # %% ~~~~~~Twiss~~~~~~~~
 init = xt.TwissInit(betx=ref['betx_0'], alfx=ref['alfx_0'], bety=ref['bety_0'], alfy=ref['alfy_0'])  # example values
 
-if 'a_m0' not in line.element_names:
-    tw = line.twiss(
-        method='4d',
-        init=init,
-        end='_end_point',
-    )
+# tw = line.twiss(
+#     method='4d',
+#     init=init,
+#     end='_end_point',
+# )
 
 # Beam size investigation
 def plot_beam_size():
@@ -215,7 +211,10 @@ def import_particles_from_hdf5(filename, p0c):
         
     return particles
 
-particles = import_particles_from_hdf5('Data/secondary_particles.h5', ref['p'])
+# particles = import_particles_from_hdf5('Data/secondary_particles.h5', ref['p'])
+particles = line.build_particles(x=0,y=0,px=0, py=0)
+pt = particles.get_table()
+
 tt = line.get_table()
 
 def track_line(line, particles):
@@ -426,11 +425,7 @@ print("Finished creating plots of phase planes.")
 
 print("Plotted phase planes.")
 
-<<<<<<< HEAD
 def plot_trajectories(particle_list, s_values, n_plot=100, show_dead=False, limit_line_width=2, limit_line_length=0.1):
-=======
-def plot_trajectories(particle_list, s_values, n_plot=100, show_dead=False):
->>>>>>> a41f9fc (working line with working plotting)
     x_values = [p.x for p in particle_list]
     y_values = [p.y for p in particle_list]  # shape = (num_elements+1, num_particles)
 
