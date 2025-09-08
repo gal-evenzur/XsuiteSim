@@ -471,7 +471,7 @@ def track_line(line, particles):
     tracked_particles = particles.copy()
     # Initialize data structures to store particle coordinates
 
-    s_values = np.zeros((len(elements_names)+1, 1))
+    s_values = [0.0]
 
     particle_list = [tracked_particles.copy()]
 
@@ -483,13 +483,14 @@ def track_line(line, particles):
         s_stop = s_stop[0]
         print(f"ELEMENT {i}: {element_name} || s={s_start:.3f}:{s_stop:.3f} m")
 
-        s_values[i+1] = s_stop
 
         # Track through this single element
         line.track(tracked_particles, ele_start=element_name, num_elements=1)
-        p_to_list = tracked_particles.copy()
-        p_to_list.sort(interleave_lost_particles=True)
-        particle_list.append(p_to_list)
+        if "a_" in element_name or "m" in element_name:
+            s_values.append(s_stop)
+            p_to_list = tracked_particles.copy()
+            p_to_list.sort(interleave_lost_particles=True)
+            particle_list.append(p_to_list)
 
 
     return particle_list, s_values
@@ -582,11 +583,11 @@ def plot_trajectories(particle_list, line, s_values, n_plot=100, show_dead=False
             axes[1].plot(s_values, y_values[:, idx], 'r-', alpha=0.3, linewidth=0.5)
         elif show_dead:
             # If particle died, use purple for x and yellow for y
-            axes[0].plot(s_values[:loss_step], x_values[:loss_step, idx], 'purple', alpha=0.3, linewidth=0.5)
-            axes[1].plot(s_values[:loss_step], y_values[:loss_step, idx], 'magenta', alpha=0.3, linewidth=0.5)
+            axes[0].plot(s_values[:loss_step+1], x_values[:loss_step+1, idx], 'purple', alpha=0.3, linewidth=0.5)
+            axes[1].plot(s_values[:loss_step+1], y_values[:loss_step+1, idx], 'magenta', alpha=0.3, linewidth=0.5)
             # Mark the loss point with a scatter point
-            axes[0].scatter(s_values[loss_step-1], x_values[loss_step-1, idx], color='k', s=9, alpha=0.7)
-            axes[1].scatter(s_values[loss_step-1], y_values[loss_step-1, idx], color='k', s=9, alpha=0.7)
+            axes[0].scatter(s_values[loss_step], x_values[loss_step, idx], color='k', s=9, alpha=0.7)
+            axes[1].scatter(s_values[loss_step], y_values[loss_step, idx], color='k', s=9, alpha=0.7)
 
     alive_particles = []
     for p in particle_list:
@@ -706,39 +707,6 @@ def plot_trajectories(particle_list, line, s_values, n_plot=100, show_dead=False
                         ax.hlines(y=sizes['q2'][3], xmin=s_pos-limit_line_length, xmax=s_pos+limit_line_length, color='green', linewidth=limit_line_width)
             
             ax.set_ylim(ylim)
-
-
-def track_line(line, particles):
-    # Track particles through each element and plot the divergence
-    tt = line.get_table()
-    elements_names = [el for el in line.element_names]
-
-    # Create a copy of the particles to track
-    tracked_particles = particles.copy()
-    # Initialize data structures to store particle coordinates
-
-    s_values = np.zeros((len(elements_names)+1, 1))
-
-    particle_list = [tracked_particles.copy()]
-
-    # Track through each element individually
-    for i, element_name in enumerate(elements_names):
-        s_start = tt.rows[i].s
-        s_start = s_start[0]
-        s_stop = tt.rows[i+1].s
-        s_stop = s_stop[0]
-        print(f"ELEMENT {i}: {element_name} || s={s_start:.3f}:{s_stop:.3f} m")
-
-        s_values[i+1] = s_stop
-
-        # Track through this single element
-        line.track(tracked_particles, ele_start=element_name, num_elements=1)
-        p_to_list = tracked_particles.copy()
-        p_to_list.sort(interleave_lost_particles=True)
-        particle_list.append(p_to_list)
-
-
-    return particle_list, s_values
 
 
 
