@@ -12,7 +12,7 @@ shifts = {
 }
 
 MagnetSettings = shifts['magnetSettings']
-n_particles = 1e6
+n_particles = 1e5
 show_dead = True
 use_integration = True
 dat_file = 'Data/secondary_particles.h5'
