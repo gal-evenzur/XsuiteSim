@@ -12,7 +12,7 @@ shifts = {
 }
 
 MagnetSettings = shifts['magnetSettings']
-n_particles = 3e5
+n_particles = 1e6
 show_dead = True
 use_integration = True
 dat_file = 'Data/secondary_particles.h5'
@@ -52,14 +52,12 @@ u = {
 ### magnets
 magsetvals = {502:[-7.637,28.55,-7.637], 490.0:[-30.68,46.42,-30.68], 490.1:[-27.99,44.98,-27.99], 490.2:[-20.38,40.42,-20.38], 490.3:[-11.56,30.05,-11.56], 490.4:[-3.37,26.72,-3.37], 490.5:[-6.66,28.86,-6.66] }
 magsetdelt = {"quad0":[0,0], "quad1":[0,0], "quad2":[0,0], "xcorr":[0,0], "dipole":[0,0]} ### cm
-Grad1 = magsetvals[MagnetSettings][0]
-Grad2 = magsetvals[MagnetSettings][1]
 
 B_dd_xcorr = 0.026107 # By
 B_dd = 0.219 # Bx
 
 zAL     = 0.30 ### the aluminum foil, cm
 zBe     = -0.84 ### the beryllium window, cm
-Z0      = zBe if(MagnetSettings==502) else zAL
+Z0      = zBe if(shifts['magnetSettings']==502) else zAL
 
 monitor_bins = (128, 256)

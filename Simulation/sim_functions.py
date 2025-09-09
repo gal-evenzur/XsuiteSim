@@ -159,6 +159,9 @@ def dipoleElement(env, spacer, name, k0, length, max_x, max_y, r_pipe,
 
 def line_init(shifts):
 
+    Grad1 = magsetvals[shifts['magnetSettings']][0]
+    Grad2 = magsetvals[shifts['magnetSettings']][1]
+
     env = xt.Environment()
     env['kq_p'] = grad_kG_to_k(Grad1, ref['p'] * u['eV_to_kgms'], ref['q'] * u['e'])  # k1 in 1/m^2
     env['kq_n'] = grad_kG_to_k(Grad2, ref['p'] * u['eV_to_kgms'], ref['q'] * u['e'])  
@@ -458,8 +461,43 @@ def twiss_plot(line, ref):
 
     fig1.subplots_adjust(left=.15, right=.92, hspace=.27)
 
+def plot_multiple_magnet_settings(shifts, mag_settings):
+    fig, axs = plt.subplots(1, len(mag_settings), figsize=(len(mag_settings)*6, 5), tight_layout=True)
+    shifts = shifts.copy()  # To avoid modifying the original shifts dictionary
 
+    for idx, setting in enumerate(mag_settings):
+        print(f"Magnet setting: {setting}")
+        shifts['magnetSettings'] = setting  # Set the magnet setting
+        
+        # Initialize line with new settings
+        line, env, ref = line_init(shifts=shifts)
+        
+        # Import particles
+        particles = import_particles_from_hdf5(line, 'Data/secondary_particles.h5', p0c=ref['p'])
+        
+        # Track particles and get histogram data
+        h, xedges, yedges = track_monitor(line, particles)
+        
+        # Plot the histogram
+        im = axs[idx].imshow(h.T, origin='lower', 
+                            extent=[xedges[0], xedges[-1], yedges[0], yedges[-1]], 
+                            aspect='auto')
+        
+        # Format plot
+        axs[idx].locator_params(axis='x', nbins=10)
+        axs[idx].locator_params(axis='y', nbins=10)
+        axs[idx].xaxis.set_minor_locator(AutoMinorLocator(10))
+        axs[idx].yaxis.set_minor_locator(AutoMinorLocator(10))
+        axs[idx].grid(True, linewidth=0.25, alpha=0.25, which='major')
+        axs[idx].set_xlabel('x [m]')
+        axs[idx].set_ylabel('y [m]')
+        axs[idx].set_title(f'Monitor at the end of the line\nmagnetSettings = {setting}')
+        
+        plt.colorbar(im, ax=axs[idx], label='Counts per bin')
 
+    plt.tight_layout()
+
+        
 def track_line(line, particles):
     # Track particles through each element and plot the divergence
     tt = line.get_table()
