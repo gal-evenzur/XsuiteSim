@@ -22,7 +22,7 @@ dy_det  = 0.35 # cm
 
 particle_start_pos = Z0 # m
 # Define detector x range
-detector_x_center_cm = -1.0 # cm
+detector_x_center_cm = 0 # cm
 # detector_x_center_cm = 0. # cm
 detector_x_center_m = detector_x_center_cm*u['cm_to_m']
 
@@ -158,7 +158,7 @@ def dipoleElement(env, spacer, name, k0, length, max_x, max_y, r_pipe,
     
     return dElement
 
-def line_init(shifts):
+def line_init(shifts, verbose=False):
 
     Grad1 = magsetvals[shifts['magnetSettings']][0]
     Grad2 = magsetvals[shifts['magnetSettings']][1]
@@ -221,7 +221,7 @@ def line_init(shifts):
         for name in line.element_names:
             element = line[name]
             if hasattr(element, 'model'):
-                print(f"Updating model for element {name} from {element.model} to {model}")
+                if verbose: print(f"Updating model for element {name} from {element.model} to {model}")
                 element.model = model
 
     # Need to input in natural units
@@ -237,7 +237,7 @@ def line_init(shifts):
 
 
 # Function to import particles from HDF5 file
-def import_particles_from_hdf5(line, filename, p0c):
+def import_particles_from_hdf5(line, filename, p0c, verbose=False):
     """
     Import particles from an HDF5 file created by particle_generation.py
     
@@ -247,7 +247,7 @@ def import_particles_from_hdf5(line, filename, p0c):
     Returns:
         xpart.Particles: Particle object for tracking
     """
-    print(f"Loading particles from {filename}")
+    if verbose: print(f"Loading particles from {filename}")
     with h5py.File(filename, 'r') as f:
         # Extract the 6D phase space coordinates
         x_coords = f['x'][:] # [m]
@@ -271,7 +271,7 @@ def import_particles_from_hdf5(line, filename, p0c):
     
 
     # Get number of particles
-    print(f"Loaded {num_particles} particles")
+    if verbose: print(f"Loaded {num_particles} particles")
     
     # Create the particle object for tracking
     particles = line.build_particles(
@@ -386,6 +386,97 @@ def test_integration_models(line, particles):
     axes[0].set_title("With integration model")
     axes[1].set_title("With simple matrix model")
 
+# %% ---> shifts functions -----><----
+
+def shifts_array(shifts, element, setting, range_vals):
+    """ create a list of shifts for a given element and setting """
+    shift_list = []
+    shifts_copy = deepcopy(shifts)
+    for val in range_vals:
+        shifts_copy[element][setting] = val
+        shift_list.append(deepcopy(shifts_copy))
+    return shift_list
+
+def histogram_mean_std(h, xedges, yedges, ax=None, threshold=3, point_threshold=30):
+    mask = h > threshold
+    h = np.where(mask, h, 0)
+
+    x_centers = (xedges[:-1] + xedges[1:]) / 2
+    y_centers = (yedges[:-1] + yedges[1:]) / 2
+    x_mesh, y_mesh = np.meshgrid(x_centers, y_centers)
+    weights = h.T.flatten()
+    mask = weights > 0
+
+    # Check if we have enough relevant points above the threshold
+    if np.sum(mask) <= threshold:
+        print("Error: Not enough data points above threshold")
+        return None, None, None, None
+
+    if np.any(mask):
+        mean_x = np.average(x_mesh.flatten()[mask], weights=weights[mask])
+        mean_y = np.average(y_mesh.flatten()[mask], weights=weights[mask])
+        std_x = np.sqrt(np.average((x_mesh.flatten()[mask] - mean_x)**2, weights=weights[mask]))
+        std_y = np.sqrt(np.average((y_mesh.flatten()[mask] - mean_y)**2, weights=weights[mask]))
+        
+        if ax is not None:
+            # Plot the mean point
+            ax.plot(mean_x, mean_y, 'wo', markersize=8)
+            ax.plot(mean_x, mean_y, 'ko', markersize=5)
+
+            # Plot horizontal line for x variance
+            ax.plot([mean_x - std_x, mean_x + std_x], [mean_y, mean_y], 'w-', linewidth=2)
+
+            # Plot vertical line for y variance
+            ax.plot([mean_x, mean_x], [mean_y - std_y, mean_y + std_y], 'w-', linewidth=2)
+
+            # Add text with mean and std values
+            ax.text(0.05, 0.95, f'μx={mean_x:.2e}, σx={std_x:.2e}\nμy={mean_y:.2e}, σy={std_y:.2e}', 
+                transform=ax.transAxes, color='white', fontsize=8,
+                verticalalignment='top', bbox=dict(facecolor='black', alpha=0.5))
+            
+        
+        return mean_x, std_x, mean_y, std_y
+
+def plot_multiple_magnet_settings(shifts_orig, mag_settings, axs=None):
+    if axs is None:
+        fig, axs = plt.subplots(1, len(mag_settings), figsize=(len(mag_settings)*6, 5), tight_layout=True)
+    shifts = deepcopy(shifts_orig)  # To avoid modifying the original shifts dictionary
+
+    for idx, setting in enumerate(mag_settings):
+        print(f"Magnet setting: {setting}")
+        shifts['magnetSettings'] = setting  # Set the magnet setting
+        
+        # Initialize line with new settings
+        line, env, ref = line_init(shifts=shifts)
+        
+        # Import particles
+        particles = import_particles_from_hdf5(line, 'Data/secondary_particles.h5', p0c=ref['p'])
+        
+        # Track particles and get histogram data
+        h, xedges, yedges = track_monitor(line, particles)
+
+        thersh= 4
+        # mask = h > thersh
+        # h = np.where(mask, h, 0)
+
+        
+        # # Plot the histogram
+        im = axs[idx].imshow(h.T, origin='lower', 
+                    extent=[xedges[0], xedges[-1], yedges[0], yedges[-1]], 
+                    aspect='auto')
+
+        histogram_mean_std(h, xedges, yedges, ax=axs[idx], threshold=thersh)
+        # Apply a threshold to ignore bins with small counts (less than 10)
+
+        # axs[idx].set_xlabel('x [m]')
+        # axs[idx].set_ylabel('y [m]')
+        # axs[idx].set_title(f'magnetSettings = {setting}')
+        
+        # plt.colorbar(im, ax=axs[idx], label='Counts per bin')
+
+    plt.tight_layout()
+
+
 
 # %% {PLotting {} FUNCTIONS}
 def twiss_plot(line, ref):
@@ -461,75 +552,6 @@ def twiss_plot(line, ref):
         ax.set_ylim(ylim)
 
     fig1.subplots_adjust(left=.15, right=.92, hspace=.27)
-
-def histogram_mean_std(h, xedges, yedges, ax=None, threshold=3):
-    mask = h > threshold
-    h = np.where(mask, h, 0)
-
-    x_centers = (xedges[:-1] + xedges[1:]) / 2
-    y_centers = (yedges[:-1] + yedges[1:]) / 2
-    x_mesh, y_mesh = np.meshgrid(x_centers, y_centers)
-    weights = h.T.flatten()
-    mask = weights > 0
-    
-    if np.any(mask):
-        mean_x = np.average(x_mesh.flatten()[mask], weights=weights[mask])
-        mean_y = np.average(y_mesh.flatten()[mask], weights=weights[mask])
-        std_x = np.sqrt(np.average((x_mesh.flatten()[mask] - mean_x)**2, weights=weights[mask]))
-        std_y = np.sqrt(np.average((y_mesh.flatten()[mask] - mean_y)**2, weights=weights[mask]))
-        
-        if ax is not None:
-            # Plot the mean point
-            ax.plot(mean_x, mean_y, 'wo', markersize=8)
-            ax.plot(mean_x, mean_y, 'ko', markersize=5)
-
-            # Plot horizontal line for x variance
-            ax.plot([mean_x - std_x, mean_x + std_x], [mean_y, mean_y], 'w-', linewidth=2)
-
-            # Plot vertical line for y variance
-            ax.plot([mean_x, mean_x], [mean_y - std_y, mean_y + std_y], 'w-', linewidth=2)
-
-            # Add text with mean and std values
-            ax.text(0.05, 0.95, f'μx={mean_x:.2e}, σx={std_x:.2e}\nμy={mean_y:.2e}, σy={std_y:.2e}', 
-                transform=ax.transAxes, color='white', fontsize=8,
-                verticalalignment='top', bbox=dict(facecolor='black', alpha=0.5))
-            
-        return mean_x, std_x, mean_y, std_y
-
-def plot_multiple_magnet_settings(shifts_orig, mag_settings, axs=None):
-    if axs is None:
-        fig, axs = plt.subplots(1, len(mag_settings), figsize=(len(mag_settings)*6, 5), tight_layout=True)
-    shifts = deepcopy(shifts_orig)  # To avoid modifying the original shifts dictionary
-
-    for idx, setting in enumerate(mag_settings):
-        print(f"Magnet setting: {setting}")
-        shifts['magnetSettings'] = setting  # Set the magnet setting
-        
-        # Initialize line with new settings
-        line, env, ref = line_init(shifts=shifts)
-        
-        # Import particles
-        particles = import_particles_from_hdf5(line, 'Data/secondary_particles.h5', p0c=ref['p'])
-        
-        # Track particles and get histogram data
-        h, xedges, yedges = track_monitor(line, particles)
-        
-        # # Plot the histogram
-        im = axs[idx].imshow(h.T, origin='lower', 
-                    extent=[xedges[0], xedges[-1], yedges[0], yedges[-1]], 
-                    aspect='auto')
-
-        histogram_mean_std(h, xedges, yedges, ax=axs[idx], threshold=3)
-        # Apply a threshold to ignore bins with small counts (less than 10)
-
-        # axs[idx].set_xlabel('x [m]')
-        # axs[idx].set_ylabel('y [m]')
-        # axs[idx].set_title(f'magnetSettings = {setting}')
-        
-        # plt.colorbar(im, ax=axs[idx], label='Counts per bin')
-
-    plt.tight_layout()
-
         
 def track_line(line, particles):
     # Track particles through each element and plot the divergence
