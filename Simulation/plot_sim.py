@@ -9,13 +9,12 @@ from matplotlib.ticker import AutoMinorLocator
 import numpy as np
 import matplotlib.pyplot as plt
 from copy import deepcopy
-from particle_generation import generate_secondary_particles, save_particles_to_hdf5
 
 plt.rcParams['image.cmap'] = 'afmhot'
 # plt.rcParams['image.cmap'] = 'copper'
 
 ctx = xo.ContextCpu()  # Use xo.ContextCupy() for GPU
-plotting = True
+plotting = False
 plot_first = True
 # Define the magnet settings to test
 change = np.linspace(0, 0, 1)  # Example range for y shift in meters
@@ -28,40 +27,18 @@ if plotting:
     fig, axs = plt.subplots(len(magnet_settings), len(change), figsize=(len(magnet_settings)*6, 5), 
                             tight_layout=True, sharex=True, sharey=True)
     
-
-for i, shift in enumerate(shift_list):
-
-    if plotting:
+    for i, shift in enumerate(shift_list):
         plot_multiple_magnet_settings(shift, magnet_settings, axs=axs[:,i])
         for j, ax in enumerate(axs[:,i]):
             ax.set_title(f'{magnet_settings[j]} {name} {setting} = {change[i]*1e3:.2f} mm')
             print(f"{name} {setting} shift = {change[i]*1e3:.2f} mm:")
-    if not plotting:
-        for j, run_number in enumerate(magnet_settings):
-            print(f"  Magnet setting {run_number}:")
-            shift['magnetSettings'] = run_number
-            
-            # Initialize line with new settings
-            line, env, ref = line_init(shifts=shift)
-            
-            # Import particles
-            particles = import_particles_from_hdf5(line, 'Data/secondary_particles.h5', p0c=ref['p'])
-            
-            # Track particles and get histogram data
-            h, xedges, yedges = track_monitor(line, particles)
-            
-            # Get statistics without plotting
-            mean_x, std_x, mean_y, std_y = histogram_mean_std(h, xedges, yedges, ax=None, threshold=3)
-            if mean_x is not None or std_x is not None or mean_y is not None or std_y is not None:
-                print(f"    μx={mean_x:.4e} m, σx={std_x:.4e} m")
-                print(f"    μy={mean_y:.4e} m, σy={std_y:.4e} m")
 
 if plot_first:
 
-    shifts[name][setting] = change.min()
+    # shifts[name][setting] = change.min()
     line, env, ref = line_init(shifts=shifts)
 
-    particles = import_particles_from_hdf5(line, 'Data/secondary_particles.h5', p0c=ref['p'])
+    particles = import_particles_from_hdf5(dat_file, ref)
     # temp_particles = generate_secondary_particles(shifts, n_particles, verbose=False)
     # save_particles_to_hdf5(temp_particles, dat_file)
 

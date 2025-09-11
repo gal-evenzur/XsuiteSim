@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 from matplotlib.colors import LogNorm
 import h5py
 import xtrack as xt
+import xpart as xp
 from params import *
 from copy import deepcopy
 plt.rcParams['image.cmap'] = 'afmhot'
@@ -67,6 +68,7 @@ def p_from_E(E, E_rest):
 ref = { # All in natural units
     'q': 1,
     'p': p_from_E(Eavg, u['rest_e']),  # E = 3 GeV, p is in eV/c
+    'm': u['rest_e'],  # electron mass in eV/c2
     'betx_0': 1.0,
     'alfx_0': 0.0,
     'bety_0': 1.0,
@@ -82,6 +84,247 @@ def grad_kG_to_k(grad_kG, p_mks, q_mks):
 def B_T_to_k(B_T, p_mks, q_mks):
     k = q_mks * B_T / p_mks  # k in 1/m
     return k
+
+# %% * * * * * P A R T I C L E S * * * * 
+
+def generate_secondary_particles(shifts, n_particles, verbose=True):
+    states = []
+    for i in range(int(n_particles)):
+        ### particle species
+        QQ = +1  ## unit charge, positron
+        mass_GeV = (MM*u['c2'])/u['GeV_to_kgm2s2'] ## GeV
+        E_GeV = 10 # GeV
+        state = GenerateGaussianBeam(E_GeV,mass_GeV,QQ, shifts)
+        states.append(state)
+    if verbose: print("Finised creating beam")
+    zAL     = +30 ### the aluminum foil, cm
+    zBe     = -84 ### the beryllium window, cm
+    Z0      = zBe if(shifts['magnetSettings']==502) else zAL
+    Z0_m    = Z0*u['cm_to_m']
+
+
+    ### plot the "positrons"
+    primary_states_at_foil = []
+    secondary_states_at_foil = []
+    for i, state in enumerate(states):
+        primary_state_at_foil = propagate_state_in_vacuum_to_z(state,Z0_m)
+        primary_states_at_foil.append(primary_state_at_foil)
+        secondary_state_at_foil = simulate_secondary_production(primary_state_at_foil,q=+1,Emin=0.5,Emax=5,smear_T=True,smear_pT=True)
+        secondary_states_at_foil.append(secondary_state_at_foil)
+        if verbose and i%10000 == 0:
+            print(f"created {i} particles")
+
+
+    return secondary_states_at_foil
+
+def save_particles_to_hdf5(states, filename):
+    """
+    Save particle 6D phase space coordinates (x, y, z, px, py, pz) to an HDF5 file
+
+    
+    Args:
+        states: List of particle states [x, y, z, px, py, pz, mass, charge]
+        filename: Output HDF5 filename
+    """
+    # Extract the 6D phase space coordinates
+    x_coords = np.array([state[0] for state in states]) # m
+    y_coords = np.array([state[1] for state in states]) # m
+    z_coords = np.array([state[2] for state in states]) # m
+    px_coords = np.array([state[3] for state in states]) # GeV/c
+    py_coords = np.array([state[4] for state in states]) # GeV/c
+    pz_coords = np.array([state[5] for state in states]) # GeV/c
+    mass = np.array([state[6] for state in states]) # GeV/c^2
+    charge = np.array([state[7] for state in states]) # e
+
+    # Create HDF5 file
+    with h5py.File(filename, 'w') as f:
+        # Create dataset for each coordinate
+        f.create_dataset('x', data=x_coords)
+        f.create_dataset('y', data=y_coords)
+        f.create_dataset('z', data=z_coords)
+        f.create_dataset('px', data=px_coords)
+        f.create_dataset('py', data=py_coords)
+        f.create_dataset('pz', data=pz_coords)
+        f.create_dataset('mass', data=mass)
+        f.create_dataset('charge', data=charge)
+        
+        # Add metadata
+        f.attrs['num_particles'] = len(states)
+        f.attrs['description'] = 'Particle 6D phase space coordinates (x, y, z, px, py, pz, mass, charge)'
+        
+        # Create a compound dataset with all coordinates together
+        dt = np.dtype([('x', np.float64), ('y', np.float64), ('z', np.float64),
+                       ('px', np.float64), ('py', np.float64), ('pz', np.float64),
+                       ('mass', np.float64), ('charge', np.float64)])
+        phase_space = np.zeros(len(states), dtype=dt)
+        phase_space['x'] = x_coords
+        phase_space['y'] = y_coords
+        phase_space['z'] = z_coords
+        phase_space['px'] = px_coords
+        phase_space['py'] = py_coords
+        phase_space['pz'] = pz_coords
+        phase_space['mass'] = mass
+        phase_space['charge'] = charge
+        
+        f.create_dataset('phase_space', data=phase_space)
+    
+    print(f"Saved {len(states)} particles to {filename}")
+
+def particles_from_states(states, ref, verbose=False):
+    """
+    Create a particle object from a list of particle states
+    Args:
+        states: List of particle states [x, y, z, px, py, pz, mass, charge]
+    Returns:
+        particles: Particle object
+    """
+    x_coords = np.array([state[0] for state in states]) # m
+    y_coords = np.array([state[1] for state in states]) # m
+    z_coords = np.array([state[2] for state in states]) # m
+    px_coords = np.array([state[3] for state in states]) # GeV/c
+    py_coords = np.array([state[4] for state in states]) # GeV/c
+    pz_coords = np.array([state[5] for state in states]) # GeV/c
+    num_particles = len(states)
+
+    p0c=ref['p']
+    mass0=ref['m']
+    q0=ref['q']
+
+    
+    px_eV = px_coords * u['GeV_to_eV']
+    py_eV = py_coords * u['GeV_to_eV']
+    pz_eV = pz_coords * u['GeV_to_eV']
+
+    p = np.sqrt(px_eV**2 + py_eV**2 + pz_eV**2)
+
+    px = px_eV / p0c # dimensionless
+    py = py_eV / p0c # dimensionless
+
+    delta = (p - p0c) / p0c  # dimensionless
+    
+
+    # Get number of particles
+    if verbose: print(f"Loaded {num_particles} particles")
+    
+    # Create the particle object for tracking
+    particles = xp.Particles(
+        p0c=p0c,
+        mass0=mass0,
+        q0=q0,
+        x=x_coords,
+        px=px,
+        y=y_coords,
+        py=py,
+        zeta=0,
+        delta=delta,  # delta = (pz [eV/c] - p0 [eV/c]) / p0
+    )
+        
+    return particles
+
+def GenerateGaussianBeam(E_GeV,mass_GeV,charge,shifts, mks=False):
+    fx0     = shifts['beam']['fx0']
+    fy0     = shifts['beam']['fy0']
+    fz0     = shifts['beam']['fz0']
+    fbeamfocus  = shifts['beam']['fbeamfocus']
+
+    lf          = E_GeV/mass_GeV
+    femittancex = 50e-3*u['mm_to_m']/lf ### mm-rad
+    femittancey = 50e-3*u['mm_to_m']/lf ### mm-rad
+    fbetax      = (fsigmax**2)/femittancex
+    fbetay      = (fsigmay**2)/femittancey
+    ### z
+    z0     = np.random.normal(fz0,fsigmaz)
+    zdrift = z0 - fbeamfocus ### correct drift distance for x, y distribution. Forces the beam to pass through the IP (i.e. focuesd at z=0)
+    ### x
+    sigmax  = fsigmax * np.sqrt(1.0 + (zdrift/fbetax)**2)
+    x0      = np.random.normal(fx0, sigmax)
+    meandx  = x0*zdrift / (zdrift**2 + fbetax**2)
+    sigmadx = np.sqrt( femittancex*fbetax / (zdrift**2 + fbetax**2) )
+    dx0     = np.random.normal(meandx, sigmadx)
+    ### y
+    sigmay  = fsigmay * np.sqrt(1.0 + (zdrift/fbetay)**2)
+    y0      = np.random.normal(fy0, sigmay)
+    meandy  = y0*zdrift / (zdrift**2 + fbetay**2)
+    sigmady = np.sqrt( femittancey*fbetay / (zdrift**2 + fbetay**2) )
+    dy0     = np.random.normal(meandy, sigmady)
+    ### p
+    pz = np.sqrt( (E_GeV**2 - mass_GeV**2)/ (dx0**2 + dy0**2 + 1.0) )
+    px = dx0*pz
+    py = dy0*pz
+    pz0 = pz*u['GeV_to_kgms'] # kg*m/s
+    px0 = px*u['GeV_to_kgms'] # kg*m/s
+    py0 = py*u['GeV_to_kgms'] # kg*m/s
+    mass_kg = mass_GeV*u['GeV_to_kgm2s2']/u['c2'] # kg
+    ### state
+    state_mks = [x0,y0,z0, px0,py0,pz0, mass_kg,charge] ### [x[m],y[m],z[m], px[kg*m/s],py[kg*m/s],pz[kg*m/s], m[kg],q[unit]]
+    state_nat = [x0,y0,z0, px,py,pz, mass_GeV,charge]   ### [x[m],y[m],z[m], px[GeV],py[GeV],pz[GeV], m[GeV],q[unit]]
+    return state_mks if(mks) else state_nat
+
+
+def propagate_state_in_vacuum_to_z(state, z):
+    if(z==state[2]): return state
+    x0 = state[0]
+    y0 = state[1]
+    z0 = state[2]
+    px = state[3]
+    py = state[4]
+    pz = state[5]
+    m  = state[6]
+    q  = state[7]
+    pxz = np.sqrt(px**2 + pz**2)
+    pyz = np.sqrt(py**2 + pz**2)
+    thetax = np.arcsin(px/pxz)
+    thetay = np.arcsin(py/pyz)
+    x = x0 + np.tan(thetax)*(z-z0)
+    y = y0 + np.tan(thetay)*(z-z0)
+    state_at_z = [x,y,z, px,py,pz, m,q]
+    return state_at_z
+
+
+def truncated_exp_NK(a,b,how_many):
+    a = -np.log(a)
+    b = -np.log(b)
+    rands = np.exp(-(np.random.rand(how_many)*(b-a) + a))
+    return rands[0] if(how_many==1) else rands
+
+
+def simulate_secondary_production(primary_state,q=+1,Emin=0.5,Emax=5,smear_T=False,smear_pT=False):    
+    x      = primary_state[0]
+    y      = primary_state[1]
+    z      = primary_state[2]
+    px     = primary_state[3]
+    py     = primary_state[4]
+    pz     = primary_state[5]
+    mass   = primary_state[6]
+    ### smear trasverse position
+    if(smear_T):
+        x = x + np.random.normal(0,smear_sigma_T_um*u['um_to_m'])
+        y = y + np.random.normal(0,smear_sigma_T_um*u['um_to_m'])
+    ### smear trasverse momenta
+    if(smear_pT):
+        px = px + np.random.normal(0,smear_sigma_P_GeV) 
+        py = py + np.random.normal(0,smear_sigma_P_GeV)
+    ### sample energy from exponential
+    E = truncated_exp_NK(Emin,Emax,1) if(Emax>Emin) else Emin # GeV
+    ### assume the x-y momemnta staty the same and correct the z momentum
+    pz = np.sqrt( E**2 - mass**2 - px**2 - py**2 ) # GeV
+    secondary_state = [x,y,z, px,py,pz, mass, q]
+    return secondary_state
+
+
+def state_GeV_to_kgms(state):
+    state_mks = [0]*len(state)
+    state_mks[0] = state[0]
+    state_mks[1] = state[1]
+    state_mks[2] = state[2]
+    state_mks[3] = state[3]*u['GeV_to_kgms'] # kg*m/s
+    state_mks[4] = state[4]*u['GeV_to_kgms'] # kg*m/s
+    state_mks[5] = state[5]*u['GeV_to_kgms'] # kg*m/s
+    state_mks[6] = state[6]*u['GeV_to_kgm2s2']/u['c2'] # kg
+    state_mks[7] = state[7]
+    return state_mks
+
+
 
 # %% RUNNIN LINE---------------------
 
@@ -237,7 +480,7 @@ def line_init(shifts, verbose=False):
 
 
 # Function to import particles from HDF5 file
-def import_particles_from_hdf5(line, filename, p0c, verbose=False):
+def import_particles_from_hdf5(filename, ref, verbose=False):
     """
     Import particles from an HDF5 file created by particle_generation.py
     
@@ -257,7 +500,11 @@ def import_particles_from_hdf5(line, filename, p0c, verbose=False):
         py_coords = f['py'][:] # [GeV/c]
         pz_coords = f['pz'][:] # [GeV/c]
         num_particles = f.attrs['num_particles']
+    p0c=ref['p']
+    mass0=ref['m']
+    q0=ref['q']
 
+    
     px_eV = px_coords * u['GeV_to_eV']
     py_eV = py_coords * u['GeV_to_eV']
     pz_eV = pz_coords * u['GeV_to_eV']
@@ -274,7 +521,10 @@ def import_particles_from_hdf5(line, filename, p0c, verbose=False):
     if verbose: print(f"Loaded {num_particles} particles")
     
     # Create the particle object for tracking
-    particles = line.build_particles(
+    particles = xp.Particles(
+        p0c=p0c,
+        mass0=mass0,
+        q0=q0,
         x=x_coords,
         px=px,
         y=y_coords,

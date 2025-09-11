@@ -22,7 +22,7 @@ dat_file = 'Data/secondary_particles.h5'
 # %% CONSTS________
 u = {
     'c': 299792458,
-    'c2': 299792458**2,
+    'c2': 8.98755179e16,
     'e': 1.602176634e-19, # elementary charge in C
     'rest_e': 0.510998950693e6, #xt.ELECTRON_MASS_EV,
     'rest_p': 938.27208943e6, #xt.PROTON_MASS_EV,
@@ -49,7 +49,7 @@ u = {
 
 
 
-### magnets
+# %% ((((magnets))))
 magsetvals = {502:[-7.637,28.55,-7.637], 490.0:[-30.68,46.42,-30.68], 490.1:[-27.99,44.98,-27.99], 490.2:[-20.38,40.42,-20.38], 490.3:[-11.56,30.05,-11.56], 490.4:[-3.37,26.72,-3.37], 490.5:[-6.66,28.86,-6.66] }
 magsetdelt = {"quad0":[0,0], "quad1":[0,0], "quad2":[0,0], "xcorr":[0,0], "dipole":[0,0]} ### cm
 
@@ -61,3 +61,24 @@ zBe     = -0.84 ### the beryllium window, cm
 Z0      = zBe if(shifts['magnetSettings']==502) else zAL
 
 monitor_bins = (128, 256)
+
+
+# %% Partilces
+
+fsigmax = 50*u['um_to_m'] ## beam sigma
+fsigmay = 50*u['um_to_m'] ## beam sigma
+fsigmaz = 150*u['um_to_m'] ## beam sigma
+MM      = 9.109e-31 ## kg, positron
+QQ      = +1  ## unit charge, positron
+mGeV    = (MM*u['c2'])/u['GeV_to_kgm2s2'] ## GeV
+E_GeV   = 10 # GeV, energy of primary partticles
+Emin    = 1 ## GeV
+Emax    = 6 ## GeV
+smearT  = True
+smearP  = True
+smear_sigma_T_um  = 0.3 ## um
+smear_sigma_P_GeV = 1.5e-3 ## GeV
+ZMAX    = 18 ## METERES
+tmax    = ZMAX / (0.99 * u['c']) ### time range for propagation (seconds): approximate time to travel 18 meters (last detector is at ~18 meters, relativistic particles going ~c)
+t_span  = (0, tmax)
+max_dt  = 1e-9
