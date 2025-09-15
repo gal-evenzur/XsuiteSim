@@ -54,33 +54,30 @@ setting = 'x'
 magnet_settings = [490, 490.1]
 shift_list = shifts_array(shifts, name, setting, change, magnet_settings)
 
+def plot_shift_array(shift_list, magnet_settings, name, setting, verbose=False):
 
-histograms, xedges, yedges = shifts_to_histogram(shift_list, filename=dat_file, change_beam=False, verbose=True)
+    histograms, xedges, yedges = shifts_to_histogram(shift_list, filename=dat_file, change_beam=False, verbose=True)
+    # Plot the histograms
 
+    fig, axs = plt.subplots(len(magnet_settings), len(change), figsize=(len(magnet_settings)*6, 5), 
+                            tight_layout=True, sharex=True, sharey=True)
 
-# Plot the histograms
+    for magnet_idx, m in enumerate(magnet_settings):
+        for i, shift in enumerate(shift_list[magnet_idx]):
+            if verbose: print(f"{m}: Started plotting change ", i+1, " of ", len(shift_list[magnet_idx]))
+            ax = axs[magnet_idx, i]
+            h = histograms[magnet_idx][i]
+            ax.imshow(h, origin='lower', extent=[xedges[0], xedges[-1], yedges[0], yedges[-1]], aspect='auto')
+            ax.set_title(f'{magnet_settings[magnet_idx]} {name} {setting} = {change[i]*1e3:.2f} mm')
 
-fig, axs = plt.subplots(len(magnet_settings), len(change), figsize=(len(magnet_settings)*6, 5), 
-                        tight_layout=True, sharex=True, sharey=True)
+            ax.xaxis.set_minor_locator(AutoMinorLocator(10))
+            ax.yaxis.set_minor_locator(AutoMinorLocator(10))
+            ax.grid(True,linewidth=0.25,alpha=0.25,which='major')
+            if verbose: print(f"{m}: Finished plotting change ", i+1, " of ", len(shift_list))
+    return histograms, xedges, yedges
 
-for magnet_idx in range(len(magnet_settings)):
-    for i, shift in enumerate(shift_list[magnet_idx]):
-        print("Started plotting change ", i+1, " of ", len(shift_list[magnet_idx]))
-        ax = axs[magnet_idx, i]
-        h = histograms[magnet_idx][i]
-        ax.imshow(h, origin='lower', extent=[xedges[0], xedges[-1], yedges[0], yedges[-1]], aspect='auto')
-        ax.set_title(f'{magnet_settings[magnet_idx]} {name} {setting} = {change[i]*1e3:.2f} mm')
-        # ax.locator_params(axis='x', nbins=10)
-        # ax.locator_params(axis='y', nbins=10)
-        # ax.xaxis.set_minor_locator(AutoMinorLocator(10))
-        # ax.yaxis.set_minor_locator(AutoMinorLocator(10))
-        # ax.grid(True,linewidth=0.25,alpha=0.25,which='major')
-        # ax.set_xlabel('x [m]')
-        # ax.set_ylabel('y [m]')
-        # plt.colorbar(ax=ax, label='Counts per bin')
-        print("Finished plotting change ", i+1, " of ", len(shift_list))
+histograms, xedges, yedges = plot_shift_array(shift_list, magnet_settings, name, setting,verbose=True)
 plt.show()
-
 
 # Save histograms and shifts to HDF5 file
 def save_to_hdf5(histograms, shift_list, magnet_settings, xedges, yedges, 
@@ -122,83 +119,5 @@ def save_to_hdf5(histograms, shift_list, magnet_settings, xedges, yedges,
             for change_idx in range(len(shift_list[magnet_idx])):
                 histograms_group.create_dataset(f'h_{change_idx}', data=histograms[magnet_idx][change_idx])
 
-
-def save_shifts_to_hdf5(shifts_list, filename, compression='None'):
-    """
-    Save list of shift dictionaries to HDF5 with hierarchical structure.
-    Optimized for the specific shift structure with nested dicts.
-    
-    Args:
-        shifts_list: List of shift dictionaries
-        filename: Path to HDF5 file
-        compression: Compression method ('gzip', 'lzf', 'szip', or None)
-    """
-    with h5py.File(filename, 'w') as f:
-        # Create main group for all shifts
-        shifts_group = f.create_group('shifts')
-        
-        for i, shift in enumerate(shifts_list):
-            # Create group for this shift
-            shift_group = shifts_group.create_group(f'shift_{i:06d}')
-            
-            for key, value in shift.items():
-                if isinstance(value, dict):
-                    # Create subgroup for nested dictionaries
-                    subgroup = shift_group.create_group(key)
-                    for subkey, subvalue in value.items():
-                        # Store each parameter as a dataset
-                        subgroup.create_dataset(
-                            subkey, 
-                            data=subvalue, 
-                            compression=compression
-                        )
-                else:
-                    # Store scalar values directly
-                    shift_group.create_dataset(
-                        key, 
-                        data=value, 
-                        compression=compression
-                    )
 # Save the data
-save_to_hdf5(histograms, shift_list, magnet_settings, xedges, yedges)
-print("Data saved successfully to histogram_data.h5")
-
-
-# Print the structure of the HDF5 file
-def print_hdf5_structure(filename=histogram_dat):
-    def print_attrs(name, obj):
-        print(f"{name}")
-        for key, val in obj.attrs.items():
-            print(f"    Attribute: {key}: {val}")
-
-    def print_datasets(name, obj):
-        if isinstance(obj, h5py.Dataset):
-            print(f"{name} - Shape: {obj.shape}, Type: {obj.dtype}")
-        
-    print(f"\nHDF5 file structure for: {filename}")
-    print("="*50)
-    
-    with h5py.File(filename, 'r') as f:
-        # Print all groups and datasets
-        print("Groups and datasets:")
-        f.visit(print_attrs)
-        
-        # Print datasets with shape information
-        print("\nDataset details:")
-        f.visititems(print_datasets)
-        
-        # Show the main structure
-        print("\nHierarchical structure:")
-        def print_hierarchy(name, obj):
-            indent = "    " * name.count('/')
-            if isinstance(obj, h5py.Group):
-                print(f"{indent}Group: {name}")
-            elif isinstance(obj, h5py.Dataset):
-                print(f"{indent}Dataset: {name}, Shape: {obj.shape}")
-        
-        f.visititems(print_hierarchy)
-
-# Execute the function to print the structure
-with h5py.File(histogram_dat, 'r') as f:
-    # Print all groups and datasets
-    print()
+# save_to_hdf5(histograms, shift_list, magnet_settings, xedges, yedges)

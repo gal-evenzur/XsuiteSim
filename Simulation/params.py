@@ -11,6 +11,15 @@ shifts = {
     'dd': {'x': 0.0, 'y': 0.0, 'ang_x': 0, 'ang_y': 0, 'ang_z': 0},
 }
 
+shift_ranges = {
+    'q0': {'x': 0.0, 'y': 0, 'ang_x': 0, 'ang_y': 0, 'ang_z': 0}, # in m, shift in x and y, ang in deg
+    'q1': {'x': 0.0, 'y': 0.0, 'ang_x': 0, 'ang_y': 0, 'ang_z': 0},
+    'q2': {'x': 0.0, 'y': 0.0, 'ang_x': 0, 'ang_y': 0, 'ang_z': 0},
+    'beam': {'fx0': 0.0, 'fy0': 0.0, 'fz0': -2, 'fbeamfocus':0.0},
+    'dd_corr': {'x': 0.0, 'y': 0.0, 'ang_x': 0, 'ang_y': 0, 'ang_z': 0},
+    'dd': {'x': 0.0, 'y': 0.0, 'ang_x': 0, 'ang_y': 0, 'ang_z': 0},
+}
+
 MagnetSettings = shifts['magnetSettings']
 n_particles = 1e5
 show_dead = True
