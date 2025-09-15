@@ -597,55 +597,29 @@ def track_line(line, particles):
 
     return particle_list, s_values
 
-def test_integration_models(line, particles):
+
+def shifts_array(shifts, element, setting, range_vals, magnet_settings=[490]):
+    """ 
+    Create a list of shifts for a given element and setting.
+    If multiple magnet_settings are provided, returns a matrix where:
+    - Each row corresponds to a different magnet setting
+    - Each column corresponds to a different value in range_vals
+    
+    Returns:
+    - shift_list: A list of dictionaries (if single magnet setting) or
+                    A 2D list where shift_list[i][j] has magnetSettings=magnet_settings[i]
+                    and element[setting]=range_vals[j]
     """
-    Test the effect of different integration models on particle tracking.
-    Compare results using 'adaptive' integration model vs simple matrix model.
-    """
-    line_integration = line.copy()
-
-    model = 'mat-kick-mat'
-    # Go through all elements in the line and update the model attribute if it exists
-    for name in line.element_names:
-        element = line[name]
-        if hasattr(element, 'model'):
-            element.model = model
-    line_integration.build_tracker()
-    line_integration.track(particles.copy())
-
-    line_no_integ = line.copy()
-    model = 'adaptive'
-    # Go through all elements in the line and update the model attribute if it exists
-    for name in line_no_integ.element_names:
-        element = line_no_integ[name]
-        if hasattr(element, 'model'):
-            element.model = model
-        
-
-    line_no_integ.build_tracker()
-    line_no_integ.track(particles.copy())
-    
-    fig, axes = plt.subplots(1, 2, figsize=u['fig_size'], sharey=True, sharex=True)
-
-    h1, xedges1, yedges1 = histogram_monitors(line, verbose=True)
-    axes[0].pcolormesh(xedges1, yedges1, h1.T)
-    
-    h2, xedges2, yedges2 = histogram_monitors(line_no_integ, verbose=True)
-    axes[1].pcolormesh(xedges2, yedges2, h2.T)
-    
-    axes[0].set_title("With integration model")
-    axes[1].set_title("With simple matrix model")
-
-# %% ---> shifts functions -----><----
-
-def shifts_array(shifts, element, setting, range_vals):
-    """ create a list of shifts for a given element and setting """
-    shift_list = []
-    shifts_copy = deepcopy(shifts)
-    for val in range_vals:
-        shifts_copy[element][setting] = val
-        shift_list.append(deepcopy(shifts_copy))
-    return shift_list
+    shift_matrix = []
+    for mag_setting in magnet_settings:
+        row = []
+        shifts_copy = deepcopy(shifts)
+        shifts_copy['magnetSettings'] = mag_setting
+        for val in range_vals:
+            shifts_copy[element][setting] = val
+            row.append(deepcopy(shifts_copy))
+        shift_matrix.append(row)
+    return shift_matrix
 
 def histogram_mean_std(h, xedges, yedges, ax=None, threshold=3, point_threshold=30):
     mask = h > threshold
@@ -710,7 +684,7 @@ def plot_multiple_magnet_settings(shifts_orig, mag_settings, axs=None):
         # h = np.where(mask, h, 0)
 
         
-        # # Plot the histogram
+        # Plot the histogram
         im = axs[idx].imshow(h.T, origin='lower', 
                     extent=[xedges[0], xedges[-1], yedges[0], yedges[-1]], 
                     aspect='auto')

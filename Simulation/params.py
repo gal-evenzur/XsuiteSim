@@ -16,7 +16,7 @@ n_particles = 1e5
 show_dead = True
 use_integration = True
 dat_file = 'Data/secondary_particles.h5'
-
+histogram_dat = 'Data/histogram_data.h5'
 
 
 # %% CONSTS________
