@@ -555,6 +555,7 @@ def histogram_monitors(line, verbose=True):
             h, xedges, yedges = np.histogram2d(x_clean, y_clean, bins=monitor_bins)
         else:
             if verbose: print(f"No particles alive at monitor {i}")
+            h, xedges, yedges = np.histogram2d([],[], bins=monitor_bins)
     
     return h, xedges, yedges
 

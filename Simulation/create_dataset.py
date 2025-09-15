@@ -21,7 +21,7 @@ plt.rcParams['image.cmap'] = 'afmhot'
 # Save multiple histograms for a shift list
 def shifts_to_histogram(shift_list, ref=ref, filename=None, change_beam=False, verbose=False, monitor_bins=monitor_bins):
     
-    if filename is None and change_beam:
+    if filename is None or change_beam:
         states = generate_secondary_particles(shifts, n_particles, verbose=verbose)
         particles = particles_from_states(states, ref, verbose=verbose)
 
@@ -36,7 +36,7 @@ def shifts_to_histogram(shift_list, ref=ref, filename=None, change_beam=False, v
 
     for magnet_idx in range(n_magnet_settings):
         for i, shift in enumerate(shift_list[magnet_idx]):
-            print(f"Processing shift {i+1}/{len(shift_list[magnet_idx])}: {shift}")
+            if verbose: print(f"Processing shift {i+1}/{len(shift_list[magnet_idx])}: {shift}")
             line, env, ref = line_init(shifts=shift)
             if change_beam:
                 states = generate_secondary_particles(shift, n_particles, verbose=verbose)
@@ -48,7 +48,7 @@ def shifts_to_histogram(shift_list, ref=ref, filename=None, change_beam=False, v
 
 
 # Define the magnet settings to test
-change = np.linspace(-1e-3, 1e-3, 4)  # Example range for y shift in meters
+change = np.linspace(-10e-3, 1e-3, 4)  # Example range for y shift in meters
 name = 'q0'
 setting = 'x'  
 magnet_settings = [490, 490.1]
@@ -56,7 +56,7 @@ shift_list = shifts_array(shifts, name, setting, change, magnet_settings)
 
 def plot_shift_array(shift_list, magnet_settings, name, setting, verbose=False):
 
-    histograms, xedges, yedges = shifts_to_histogram(shift_list, filename=dat_file, change_beam=False, verbose=True)
+    histograms, xedges, yedges = shifts_to_histogram(shift_list, filename=dat_file, change_beam=False, verbose=verbose)
     # Plot the histograms
 
     fig, axs = plt.subplots(len(magnet_settings), len(change), figsize=(len(magnet_settings)*6, 5), 
