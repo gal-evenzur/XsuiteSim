@@ -57,9 +57,10 @@ def shifts_to_histogram(shift_list, ref=ref, filename=None, change_beam=False,
 # Define the magnet settings to test
 change = np.linspace(-1.5,1.5, 6)  # Example range for y shift in meters
 name = 'q0'
-setting = 'ang_x'  
+setting = 'x'  
 magnet_settings = [490, 490.1]
-shift_list = shifts_array(shifts, name, setting, change, magnet_settings)
+# shift_list = shifts_array_deterministic(shifts, name, setting, change, magnet_settings)
+shift_list = shifts_array_random(shifts, shifts_range, 5, magnet_settings=magnet_settings)
 
 def plot_shift_array(shift_list, magnet_settings, name, setting, verbose=False):
 
@@ -67,7 +68,7 @@ def plot_shift_array(shift_list, magnet_settings, name, setting, verbose=False):
                                                       verbose=verbose, normalize=True)
     # Plot the histograms
 
-    fig, axs = plt.subplots(len(magnet_settings), len(change), figsize=(len(magnet_settings)*6, 5), 
+    fig, axs = plt.subplots(len(shift_list), len(shift_list[0]), figsize=(len(magnet_settings)*6, 5), 
                             tight_layout=True, sharex=True, sharey=True)
 
     for magnet_idx, m in enumerate(magnet_settings):
@@ -76,7 +77,8 @@ def plot_shift_array(shift_list, magnet_settings, name, setting, verbose=False):
             ax = axs[magnet_idx, i]
             h = histograms[magnet_idx][i]
             ax.imshow(h, origin='lower', extent=[xedges[0], xedges[-1], yedges[0], yedges[-1]], aspect='auto')
-            ax.set_title(f'{magnet_settings[magnet_idx]} {name} {setting} = {change[i]*1e3:.2f} mm')
+            change = shift[name][setting]
+            ax.set_title(f'{magnet_settings[magnet_idx]} {name} {setting} = {change*1e3:.2f} mm')
 
             ax.xaxis.set_minor_locator(AutoMinorLocator(10))
             ax.yaxis.set_minor_locator(AutoMinorLocator(10))

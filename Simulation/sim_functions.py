@@ -600,7 +600,7 @@ def track_line(line, particles):
     return particle_list, s_values
 
 
-def shifts_array(shifts, element, setting, range_vals, magnet_settings=[490]):
+def shifts_array_deterministic(shifts, element, setting, range_vals, magnet_settings=[490]):
     """ 
     Create a list of shifts for a given element and setting.
     If multiple magnet_settings are provided, returns a matrix where:
@@ -622,6 +622,52 @@ def shifts_array(shifts, element, setting, range_vals, magnet_settings=[490]):
             row.append(deepcopy(shifts_copy))
         shift_matrix.append(row)
     return shift_matrix
+
+def shifts_array_random(shifts, shifts_range, n_samples, magnet_settings=[490]):
+    """ 
+    Create a matrix of random shift configurations.
+    Each row corresponds to a different magnet setting.
+    Each column corresponds to a different random sample of shifts within the specified ranges.
+    Args:
+        shifts: Base shifts dictionary to copy and modify
+        shifts_range: Dictionary specifying the range for each element and setting to randomize
+                      e.g., {'q0': {'x': (-0.001, 0.001), 'y': (-0.001, 0.001)}, 'q1': {'ang_z': (-0.01, 0.01)}}
+        n_samples: Number of random samples to generate for each magnet setting
+        magnet_settings: List of magnet settings to iterate over
+    Returns:
+        shift_matrix: A 2D list where shift_matrix[magnet_idx][i] 
+            has magnetSettings=magnet_settings[magnet_idx]
+                      and is the i-th random sample of shifts within the specified ranges
+                      defined in shifts_range
+    """
+    shift_matrix = []
+    # Generate random number for seeding
+    seed = np.random.randint(0, 100000)
+     
+    for mag_setting in magnet_settings:
+        np.random.seed(seed)
+        row = [] # Each row corresponds to a magnet setting
+        shifts_copy = deepcopy(shifts)
+        shifts_copy['magnetSettings'] = mag_setting
+
+        # Generate n_samples random configurations corresponding to shift_ranges
+        for _ in range(n_samples):
+            shifts_sample = deepcopy(shifts_copy)
+            for element, settings in shifts_range.items(): 
+                # element is like 'q0', settings is like {'x': (-0.001, 0.001), 'y': (-0.001, 0.001), ...}
+                if type(settings) is not dict:
+                    continue  # Skip if settings is not a dictionary
+                for position, rand_range in settings.items():
+                    # position is like 'x', min_val and max_val are the range limits
+                    if type(rand_range) != tuple or len(rand_range) != 2:
+                        continue  # Skip if range is not defined properly
+                    # Sample a random value within the specified range
+                    random_val = np.random.uniform(*rand_range)
+                    shifts_sample[element][position] = random_val
+            row.append(deepcopy(shifts_sample))
+        shift_matrix.append(row)
+    return shift_matrix
+
 
 def histogram_mean_std(h, xedges, yedges, ax=None, threshold=3, point_threshold=30):
     mask = h > threshold

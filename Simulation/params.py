@@ -11,10 +11,10 @@ shifts = {
     'dd': {'x': 0.0, 'y': 0.0, 'ang_x': 0, 'ang_y': 0, 'ang_z': 0},
 }
 
-shift_ranges = {
-    'q0': {'x': 0.0, 'y': 0, 'ang_x': 0, 'ang_y': 0, 'ang_z': 0}, # in m, shift in x and y, ang in deg
-    'q1': {'x': 0.0, 'y': 0.0, 'ang_x': 0, 'ang_y': 0, 'ang_z': 0},
-    'q2': {'x': 0.0, 'y': 0.0, 'ang_x': 0, 'ang_y': 0, 'ang_z': 0},
+shifts_range = {
+    'q0': {'x': (-0.6e-3, 4.2e-3), 'y': (-1e-3, 1e-3), 'ang_x': (-0.5,0.5), 'ang_y': (-0.5,0.5), 'ang_z': (-0.5,0.5)}, # in m, shift in x and y, ang in deg
+    'q1': {'x': (-1e-3, 1e-3), 'y': (-1e-3, 1e-3), 'ang_x': (-0.5,0.5), 'ang_y': (-0.5,0.5), 'ang_z': (-0.5,0.5)},
+    'q2': {'x': (-1e-3, 1e-3), 'y': (-1e-3, 1e-3), 'ang_x': (-0.5,0.5), 'ang_y': (-0.5,0.5), 'ang_z': (-0.5,0.5)},
     'beam': {'fx0': 0.0, 'fy0': 0.0, 'fz0': -2, 'fbeamfocus':0.0},
     'dd_corr': {'x': 0.0, 'y': 0.0, 'ang_x': 0, 'ang_y': 0, 'ang_z': 0},
     'dd': {'x': 0.0, 'y': 0.0, 'ang_x': 0, 'ang_y': 0, 'ang_z': 0},

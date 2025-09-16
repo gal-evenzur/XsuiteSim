@@ -21,7 +21,7 @@ change = np.linspace(0, 0, 1)  # Example range for y shift in meters
 name = 'dd'
 setting = 'ang_y'  
 magnet_settings = [490, 490.1]
-shift_list = shifts_array(shifts, name, setting, change)
+shift_list = shifts_array_deterministic(shifts, name, setting, change)
 
 if plotting:
     fig, axs = plt.subplots(len(magnet_settings), len(change), figsize=(len(magnet_settings)*6, 5), 
