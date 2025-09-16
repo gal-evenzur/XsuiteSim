@@ -19,7 +19,9 @@ plt.rcParams['image.cmap'] = 'afmhot'
 
 
 # Save multiple histograms for a shift list
-def shifts_to_histogram(shift_list, ref=ref, filename=None, change_beam=False, verbose=False, monitor_bins=monitor_bins):
+def shifts_to_histogram(shift_list, ref=ref, filename=None, change_beam=False,
+                        normalize=False,
+                        verbose=False, monitor_bins=monitor_bins):
     
     if filename is None or change_beam:
         states = generate_secondary_particles(shifts, n_particles, verbose=verbose)
@@ -44,19 +46,25 @@ def shifts_to_histogram(shift_list, ref=ref, filename=None, change_beam=False, v
             h, xedges, yedges = track_monitor(line, particles)
             histograms[magnet_idx, i] = h.T  # Transpose to match the orientation
 
+        # After creating the entire batch of histograms for this magnet setting, normalize if needed
+        if normalize:
+            histograms[magnet_idx] = normalize_batch_hists(histograms[magnet_idx], std=False, minmax=True)
+            if verbose: print(f"Normalized histograms for magnet setting {magnet_idx+1}/{n_magnet_settings}")
+
     return histograms, xedges, yedges
 
 
 # Define the magnet settings to test
-change = np.linspace(-10e-3, 1e-3, 4)  # Example range for y shift in meters
+change = np.linspace(-1.5,1.5, 6)  # Example range for y shift in meters
 name = 'q0'
-setting = 'x'  
+setting = 'ang_x'  
 magnet_settings = [490, 490.1]
 shift_list = shifts_array(shifts, name, setting, change, magnet_settings)
 
 def plot_shift_array(shift_list, magnet_settings, name, setting, verbose=False):
 
-    histograms, xedges, yedges = shifts_to_histogram(shift_list, filename=dat_file, change_beam=False, verbose=verbose)
+    histograms, xedges, yedges = shifts_to_histogram(shift_list, filename=dat_file, change_beam=False,
+                                                      verbose=verbose, normalize=True)
     # Plot the histograms
 
     fig, axs = plt.subplots(len(magnet_settings), len(change), figsize=(len(magnet_settings)*6, 5), 
@@ -76,7 +84,7 @@ def plot_shift_array(shift_list, magnet_settings, name, setting, verbose=False):
             if verbose: print(f"{m}: Finished plotting change ", i+1, " of ", len(shift_list))
     return histograms, xedges, yedges
 
-histograms, xedges, yedges = plot_shift_array(shift_list, magnet_settings, name, setting,verbose=True)
+histograms, xedges, yedges = plot_shift_array(shift_list, magnet_settings, name, setting,verbose=False)
 plt.show()
 
 # Save histograms and shifts to HDF5 file

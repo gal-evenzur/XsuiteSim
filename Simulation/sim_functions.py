@@ -535,8 +535,9 @@ def import_particles_from_hdf5(filename, ref, verbose=False):
         
     return particles
 
+# %% < [] [] HISTOGRAM [] [] >
 
-def histogram_monitors(line, verbose=True):
+def histogram_monitors(line, verbose=False):
 
     m = [el for el in line.elements if isinstance(el, xt.ParticlesMonitor)]
     for i, mon in enumerate(m):
@@ -701,7 +702,43 @@ def plot_multiple_magnet_settings(shifts_orig, mag_settings, axs=None):
 
     plt.tight_layout()
 
-
+def normalize_batch_hists(hist_arr, std=False, minmax=True):
+    """
+    Normalize histograms in a batch array.
+    
+    Args:
+        hist_arr: Array of shape (n_batch, h_height, h_width) containing histograms
+    
+    Returns:
+        tuple: (z_normalized, minmax_normalized) where:
+            - z_normalized: Zero mean, unit std normalized histograms
+            - minmax_normalized: Min-max normalized histograms to [0,1]
+    """
+    # Z-score normalization (zero mean, unit std)
+    # norm = hist_arr.copy()
+    norm = hist_arr
+    if std:
+        for i in range(norm.shape[0]):
+            batch = norm[i]
+            mean = np.mean(batch)
+            std = np.std(batch)
+            if std > 0:  # Avoid division by zero
+                norm[i] = (batch - mean) / std
+            else:
+                norm[i] = batch - mean
+    
+    # Min-max normalization to [0,1]
+    if minmax:
+        for i in range(norm.shape[0]):
+            batch = norm[i]
+            min_val = np.min(batch)
+            max_val = np.max(batch)
+            if max_val > min_val:  # Avoid division by zero
+                norm[i] = (batch - min_val) / (max_val - min_val)
+            else:
+                norm[i] = np.zeros_like(batch)
+    
+    return norm
 
 # %% {PLotting {} FUNCTIONS}
 def twiss_plot(line, ref):
