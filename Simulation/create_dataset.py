@@ -38,6 +38,9 @@ def shifts_to_histogram(shift_list, ref=ref, filename=None, change_beam=False,
 
     for magnet_idx in range(n_magnet_settings):
         for i, shift in enumerate(shift_list[magnet_idx]):
+            if is_array:
+                shift = array_to_shifts(shift, shifts_template=shifts)
+
             if verbose: print(f"Processing shift {i+1}/{len(shift_list[magnet_idx])}: {shift}")
             line, env, ref = line_init(shifts=shift)
             if change_beam:
@@ -60,17 +63,8 @@ name = 'q0'
 setting = 'x'  
 magnet_settings = [490, 490.1]
 # shift_list = shifts_array_deterministic(shifts, name, setting, change, magnet_settings)
-shift_list = shifts_array_random(shifts, shifts_range, 5, magnet_settings=magnet_settings)
+shift_list = shifts_array_random(shifts, shifts_range, 5, magnet_settings=magnet_settings, is_array=is_array)
 
-r = shifts_range
-n = num_shifts_range
-print(r)
-print("And now in array form:")
-r_arr = ranges_to_array(r, n)
-print(r_arr)
-print("And back to dict form:")
-s_dict = array_to_shifts(r_arr, shifts_range)
-print(s_dict)
 
 
 def plot_shift_array(shift_list, magnet_settings, name, setting, verbose=False):
@@ -84,6 +78,8 @@ def plot_shift_array(shift_list, magnet_settings, name, setting, verbose=False):
 
     for magnet_idx, m in enumerate(magnet_settings):
         for i, shift in enumerate(shift_list[magnet_idx]):
+            if is_array:
+                shift = array_to_shifts(shift, shifts_template=shifts)
             if verbose: print(f"{m}: Started plotting change ", i+1, " of ", len(shift_list[magnet_idx]))
             ax = axs[magnet_idx, i]
             h = histograms[magnet_idx][i]
@@ -101,4 +97,4 @@ histograms, xedges, yedges = plot_shift_array(shift_list, magnet_settings, name,
 plt.show()
 
 # Save the data
-# save_to_hdf5(histograms, shift_list, magnet_settings, xedges, yedges)
+# save_to_hdf5(histograms, shift_list, magnet_settings, xedges, yedges, verbose=False)

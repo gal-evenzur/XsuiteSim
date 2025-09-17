@@ -7,6 +7,7 @@ import xtrack as xt
 import xpart as xp
 from params import *
 from copy import deepcopy
+import time
 plt.rcParams['image.cmap'] = 'afmhot'
 # %% +++++++++Monitor sizes 
 npix_x = 1024
@@ -402,9 +403,9 @@ def dipoleElement(env, spacer, name, k0, length, max_x, max_y, r_pipe,
     return dElement
 
 def line_init(shifts, verbose=False):
-
-    Grad1 = magsetvals[shifts['magnetSettings']][0]
-    Grad2 = magsetvals[shifts['magnetSettings']][1]
+    m = round(float(shifts['magnetSettings']), 1)
+    Grad1 = magsetvals[m][0]
+    Grad2 = magsetvals[m][1]
 
     env = xt.Environment()
     env['kq_p'] = grad_kG_to_k(Grad1, ref['p'] * u['eV_to_kgms'], ref['q'] * u['e'])  # k1 in 1/m^2
@@ -623,7 +624,7 @@ def shifts_array_deterministic(shifts, element, setting, range_vals, magnet_sett
         shift_matrix.append(row)
     return shift_matrix
 
-def shifts_array_random(shifts, shifts_range, n_samples, magnet_settings=[490]):
+def shifts_array_random(shifts, shifts_range, n_samples, magnet_settings=[490], is_array = False):
     """ 
     Create a matrix of random shift configurations.
     Each row corresponds to a different magnet setting.
@@ -640,34 +641,47 @@ def shifts_array_random(shifts, shifts_range, n_samples, magnet_settings=[490]):
                       and is the i-th random sample of shifts within the specified ranges
                       defined in shifts_range
     """
-    shift_matrix = []
     # Generate random number for seeding
     seed = np.random.randint(0, 100000)
-     
-    for mag_setting in magnet_settings:
-        np.random.seed(seed)
-        row = [] # Each row corresponds to a magnet setting
-        shifts_copy = deepcopy(shifts)
-        shifts_copy['magnetSettings'] = mag_setting
+    if is_array:
+        shift_matrix = np.zeros((len(magnet_settings), n_samples, num_shifts), dtype=np.float32)
+        range_array = ranges_to_array(shifts_range, n=num_shifts_range)
+        for m_idx, mag_setting in enumerate(magnet_settings):
+            np.random.seed(seed)
+            shift_matrix[m_idx, :, 0] = mag_setting  # First column is magnet setting
+            for s_idx, lowhigh in enumerate(range_array):
+                # s_idx points to the setting in range_array, like s_idx=1 --> 'q0' 'x'
+                # go through each setting and generate n_samples random values within the specified range
+                low, high = lowhigh
+                if low != high:
+                    shift_matrix[m_idx, :, s_idx + 1] = np.random.uniform(low, high, size=n_samples)
+                else:
+                    shift_matrix[m_idx, :, s_idx + 1] = low  # If range is zero, just use the fixed value
+    else:
+        shift_matrix = []
+        for mag_setting in magnet_settings:
+            np.random.seed(seed)
+            row = [] # Each row corresponds to a magnet setting
+            shifts_copy = deepcopy(shifts)
+            shifts_copy['magnetSettings'] = mag_setting
 
-        # Generate n_samples random configurations corresponding to shift_ranges
-        for _ in range(n_samples):
-            shifts_sample = deepcopy(shifts_copy)
-            for element, settings in shifts_range.items(): 
-                # element is like 'q0', settings is like {'x': (-0.001, 0.001), 'y': (-0.001, 0.001), ...}
-                if type(settings) is not dict:
-                    continue  # Skip if settings is not a dictionary
-                for position, rand_range in settings.items():
-                    # position is like 'x', min_val and max_val are the range limits
-                    if type(rand_range) != tuple or len(rand_range) != 2:
-                        continue  # Skip if range is not defined properly
-                    # Sample a random value within the specified range
-                    random_val = np.random.uniform(*rand_range)
-                    shifts_sample[element][position] = random_val
-            row.append(deepcopy(shifts_sample))
-        shift_matrix.append(row)
+            # Generate n_samples random configurations corresponding to shift_ranges
+            for _ in range(n_samples):
+                shifts_sample = deepcopy(shifts_copy)
+                for element, settings in shifts_range.items(): 
+                    # element is like 'q0', settings is like {'x': (-0.001, 0.001), 'y': (-0.001, 0.001), ...}
+                    if type(settings) is not dict:
+                        continue  # Skip if settings is not a dictionary
+                    for position, rand_range in settings.items():
+                        # position is like 'x', min_val and max_val are the range limits
+                        if type(rand_range) != tuple or len(rand_range) != 2:
+                            continue  # Skip if range is not defined properly
+                        # Sample a random value within the specified range
+                        random_val = np.random.uniform(*rand_range)
+                        shifts_sample[element][position] = random_val
+                row.append(deepcopy(shifts_sample))
+            shift_matrix.append(row)
     return shift_matrix
-
 
 def histogram_mean_std(h, xedges, yedges, ax=None, threshold=3, point_threshold=30):
     mask = h > threshold
@@ -752,7 +766,11 @@ def plot_multiple_magnet_settings(shifts_orig, mag_settings, axs=None):
 # 
 # Save histograms and shifts to HDF5 file
 def save_to_hdf5(histograms, shift_list, magnet_settings, xedges, yedges, 
-                 filename=histogram_dat):
+                 filename=histogram_dat, verbose=False):
+    if verbose:
+        start_time = time.time()
+        print(f"Starting HDF5 save to {filename}")
+    
     with h5py.File(filename, 'w') as f:
         # Store edges as global datasets
         f.create_dataset('xedges', data=xedges)
@@ -764,31 +782,12 @@ def save_to_hdf5(histograms, shift_list, magnet_settings, xedges, yedges,
             group_name = f'magnet_{setting}'
             magnet_group = f.create_group(group_name)
             
-            # Create subgroup for shifts
-            shifts_group = magnet_group.create_group('shifts')
-            for change_idx, shift in enumerate(shift_list[magnet_idx]):
-                shift_group = shifts_group.create_group(f's_{change_idx}')
-                for key, value in shift.items():
-                    if isinstance(value, dict):
-                        # Create subgroup for nested dictionaries
-                        subgroup = shift_group.create_group(key)
-                        for subkey, subvalue in value.items():
-                            # Store each parameter as a dataset
-                            subgroup.create_dataset(
-                                subkey, 
-                                data=subvalue, 
-                            )
-                    else:
-                        # Store scalar values directly
-                        shift_group.create_dataset(
-                            key, 
-                            data=value, 
-                        )
-
-            # Create subgroup for histograms
-            histograms_group = magnet_group.create_group('histograms')
-            for change_idx in range(len(shift_list[magnet_idx])):
-                histograms_group.create_dataset(f'h_{change_idx}', data=histograms[magnet_idx][change_idx])
+            magnet_group.create_dataset('shifts_array', data=shift_list[magnet_idx])        
+            magnet_group.create_dataset('histograms', data=histograms[magnet_idx])
+            magnet_group.attrs['magnetSettings'] = setting    
+    if verbose:
+        end_time = time.time()
+        print(f"HDF5 save completed in {end_time - start_time:.2f} seconds")
 
 def ranges_to_array(ranges, n):
     r_arr = np.zeros((n,2), dtype=np.float32)
