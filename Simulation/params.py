@@ -20,6 +20,21 @@ shifts_range = {
     'dd': {'x': 0.0, 'y': 0.0, 'ang_x': 0, 'ang_y': 0, 'ang_z': 0},
 }
 
+# Calculate the number of integers in shifts
+def count_numeric_values(data):
+    if isinstance(data, (int, float)):
+        return 1
+    elif isinstance(data, dict):
+        return sum(count_numeric_values(value) for value in data.values())
+    elif isinstance(data, (list, tuple)):
+        return 1
+    else:
+        return 0
+
+num_shifts = count_numeric_values(shifts)
+num_shifts_range = count_numeric_values(shifts_range)
+
+
 MagnetSettings = shifts['magnetSettings']
 n_particles = 1e5
 show_dead = True

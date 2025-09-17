@@ -748,6 +748,93 @@ def plot_multiple_magnet_settings(shifts_orig, mag_settings, axs=None):
 
     plt.tight_layout()
 
+# %% +++++++++DataSET++++++++++++++++
+# 
+# Save histograms and shifts to HDF5 file
+def save_to_hdf5(histograms, shift_list, magnet_settings, xedges, yedges, 
+                 filename=histogram_dat):
+    with h5py.File(filename, 'w') as f:
+        # Store edges as global datasets
+        f.create_dataset('xedges', data=xedges)
+        f.create_dataset('yedges', data=yedges)
+        
+        # Create a group for each magnet setting
+        for magnet_idx, setting in enumerate(magnet_settings):
+            # Create main group for this magnet setting
+            group_name = f'magnet_{setting}'
+            magnet_group = f.create_group(group_name)
+            
+            # Create subgroup for shifts
+            shifts_group = magnet_group.create_group('shifts')
+            for change_idx, shift in enumerate(shift_list[magnet_idx]):
+                shift_group = shifts_group.create_group(f's_{change_idx}')
+                for key, value in shift.items():
+                    if isinstance(value, dict):
+                        # Create subgroup for nested dictionaries
+                        subgroup = shift_group.create_group(key)
+                        for subkey, subvalue in value.items():
+                            # Store each parameter as a dataset
+                            subgroup.create_dataset(
+                                subkey, 
+                                data=subvalue, 
+                            )
+                    else:
+                        # Store scalar values directly
+                        shift_group.create_dataset(
+                            key, 
+                            data=value, 
+                        )
+
+            # Create subgroup for histograms
+            histograms_group = magnet_group.create_group('histograms')
+            for change_idx in range(len(shift_list[magnet_idx])):
+                histograms_group.create_dataset(f'h_{change_idx}', data=histograms[magnet_idx][change_idx])
+
+def ranges_to_array(ranges, n):
+    r_arr = np.zeros((n,2), dtype=np.float32)
+    
+    def req_ranges_to_array(data, arr, idx):
+        for key, value in data.items():
+            if isinstance(value, dict):
+                idx = req_ranges_to_array(value, arr, idx)
+            elif isinstance(value, (list, tuple, int, float)):
+                arr[idx, :] = value
+                idx += 1
+        return idx
+
+    req_ranges_to_array(ranges, r_arr, 0)
+    return r_arr
+
+def shifts_to_array(shifts, n):
+    s_arr = np.zeros((n,), dtype=np.float32)
+    
+    def req_shifts_to_array(data, arr, idx):
+        for key, value in data.items():
+            if isinstance(value, dict):
+                idx = req_shifts_to_array(value, arr, idx)
+            else:
+                arr[idx] = value
+                idx += 1
+        return idx
+
+    req_shifts_to_array(shifts, s_arr, 0)
+    return s_arr
+
+def array_to_shifts(s_arr, shifts_template):
+    shifts = deepcopy(shifts_template)
+    
+    def req_array_to_shifts(arr, data, idx):
+        for key, value in data.items():
+            if isinstance(value, dict):
+                idx = req_array_to_shifts(arr, value, idx)
+            else:
+                data[key] = arr[idx]
+                idx += 1
+        return idx
+
+    req_array_to_shifts(s_arr, shifts, 0)
+    return shifts
+
 def normalize_batch_hists(hist_arr, std=False, minmax=True):
     """
     Normalize histograms in a batch array.

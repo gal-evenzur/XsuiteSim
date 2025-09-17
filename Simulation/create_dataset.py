@@ -62,6 +62,17 @@ magnet_settings = [490, 490.1]
 # shift_list = shifts_array_deterministic(shifts, name, setting, change, magnet_settings)
 shift_list = shifts_array_random(shifts, shifts_range, 5, magnet_settings=magnet_settings)
 
+r = shifts_range
+n = num_shifts_range
+print(r)
+print("And now in array form:")
+r_arr = ranges_to_array(r, n)
+print(r_arr)
+print("And back to dict form:")
+s_dict = array_to_shifts(r_arr, shifts_range)
+print(s_dict)
+
+
 def plot_shift_array(shift_list, magnet_settings, name, setting, verbose=False):
 
     histograms, xedges, yedges = shifts_to_histogram(shift_list, filename=dat_file, change_beam=False,
@@ -88,46 +99,6 @@ def plot_shift_array(shift_list, magnet_settings, name, setting, verbose=False):
 
 histograms, xedges, yedges = plot_shift_array(shift_list, magnet_settings, name, setting,verbose=False)
 plt.show()
-
-# Save histograms and shifts to HDF5 file
-def save_to_hdf5(histograms, shift_list, magnet_settings, xedges, yedges, 
-                 filename=histogram_dat):
-    with h5py.File(filename, 'w') as f:
-        # Store edges as global datasets
-        f.create_dataset('xedges', data=xedges)
-        f.create_dataset('yedges', data=yedges)
-        
-        # Create a group for each magnet setting
-        for magnet_idx, setting in enumerate(magnet_settings):
-            # Create main group for this magnet setting
-            group_name = f'magnet_{setting}'
-            magnet_group = f.create_group(group_name)
-            
-            # Create subgroup for shifts
-            shifts_group = magnet_group.create_group('shifts')
-            for change_idx, shift in enumerate(shift_list[magnet_idx]):
-                shift_group = shifts_group.create_group(f's_{change_idx}')
-                for key, value in shift.items():
-                    if isinstance(value, dict):
-                        # Create subgroup for nested dictionaries
-                        subgroup = shift_group.create_group(key)
-                        for subkey, subvalue in value.items():
-                            # Store each parameter as a dataset
-                            subgroup.create_dataset(
-                                subkey, 
-                                data=subvalue, 
-                            )
-                    else:
-                        # Store scalar values directly
-                        shift_group.create_dataset(
-                            key, 
-                            data=value, 
-                        )
-
-            # Create subgroup for histograms
-            histograms_group = magnet_group.create_group('histograms')
-            for change_idx in range(len(shift_list[magnet_idx])):
-                histograms_group.create_dataset(f'h_{change_idx}', data=histograms[magnet_idx][change_idx])
 
 # Save the data
 # save_to_hdf5(histograms, shift_list, magnet_settings, xedges, yedges)
