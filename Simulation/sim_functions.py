@@ -479,6 +479,71 @@ def line_init(shifts, verbose=False):
 
     return line, env, ref
 
+# Go element by element and track particles
+def track_line(line, particles):
+    # Track particles through each element and plot the divergence
+    tt = line.get_table()
+    elements_names = [el for el in line.element_names]
+
+    # Create a copy of the particles to track
+    tracked_particles = particles.copy()
+    # Initialize data structures to store particle coordinates
+
+    s_values = np.zeros((len(elements_names)+1, 1))
+
+    particle_list = [tracked_particles.copy()]
+
+    # Track through each element individually
+    for i, element_name in enumerate(elements_names):
+        s_start = tt.rows[i].s
+        s_start = s_start[0]
+        s_stop = tt.rows[i+1].s
+        s_stop = s_stop[0]
+        print(f"ELEMENT {i}: {element_name} || s={s_start:.3f}:{s_stop:.3f} m")
+
+        s_values[i+1] = s_stop
+
+        # Track through this single element
+        line.track(tracked_particles, ele_start=element_name, num_elements=1)
+        p_to_list = tracked_particles.copy()
+        p_to_list.sort(interleave_lost_particles=True)
+        particle_list.append(p_to_list)
+
+
+    return particle_list, s_values
+
+
+def histogram_monitors(line, verbose=False):
+
+    m = [el for el in line.elements if isinstance(el, xt.ParticlesMonitor)]
+    for i, mon in enumerate(m):
+        x, y = np.squeeze(mon.x), np.squeeze(mon.y)
+        px, py = np.squeeze(mon.px), np.squeeze(mon.py)
+    
+        # Filter out dead particles (those with x=y=px=py=0)
+        mask = ~((x == 0) & (y == 0) & (px == 0) & (py == 0))
+        x_clean = x[mask]
+        y_clean = y[mask]
+
+        if verbose: print(f"Monitor {i}: {len(x_clean)}/{len(x)} particles alive")
+
+        if len(x_clean) > 0:  # Only plot if there are particles
+            # XY spatial plot
+            h, xedges, yedges = np.histogram2d(x_clean, y_clean, bins=monitor_bins)
+        else:
+            if verbose: print(f"No particles alive at monitor {i}")
+            h, xedges, yedges = np.histogram2d([],[], bins=monitor_bins)
+    
+    return h, xedges, yedges
+
+
+
+def track_monitor(line, particles):
+    line.track(particles.copy())
+
+    h, xedges, yedges = histogram_monitors(line)
+
+    return h, xedges, yedges
 
 # Function to import particles from HDF5 file
 def import_particles_from_hdf5(filename, ref, verbose=False):
@@ -536,71 +601,10 @@ def import_particles_from_hdf5(filename, ref, verbose=False):
         
     return particles
 
-# %% < [] [] HISTOGRAM [] [] >
 
-def histogram_monitors(line, verbose=False):
+# Retarted functions:
 
-    m = [el for el in line.elements if isinstance(el, xt.ParticlesMonitor)]
-    for i, mon in enumerate(m):
-        x, y = np.squeeze(mon.x), np.squeeze(mon.y)
-        px, py = np.squeeze(mon.px), np.squeeze(mon.py)
-    
-        # Filter out dead particles (those with x=y=px=py=0)
-        mask = ~((x == 0) & (y == 0) & (px == 0) & (py == 0))
-        x_clean = x[mask]
-        y_clean = y[mask]
-
-        if verbose: print(f"Monitor {i}: {len(x_clean)}/{len(x)} particles alive")
-
-        if len(x_clean) > 0:  # Only plot if there are particles
-            # XY spatial plot
-            h, xedges, yedges = np.histogram2d(x_clean, y_clean, bins=monitor_bins)
-        else:
-            if verbose: print(f"No particles alive at monitor {i}")
-            h, xedges, yedges = np.histogram2d([],[], bins=monitor_bins)
-    
-    return h, xedges, yedges
-
-def track_monitor(line, particles):
-    line.track(particles.copy())
-
-    h, xedges, yedges = histogram_monitors(line)
-
-    return h, xedges, yedges
-
-def track_line(line, particles):
-    # Track particles through each element and plot the divergence
-    tt = line.get_table()
-    elements_names = [el for el in line.element_names]
-
-    # Create a copy of the particles to track
-    tracked_particles = particles.copy()
-    # Initialize data structures to store particle coordinates
-
-    s_values = np.zeros((len(elements_names)+1, 1))
-
-    particle_list = [tracked_particles.copy()]
-
-    # Track through each element individually
-    for i, element_name in enumerate(elements_names):
-        s_start = tt.rows[i].s
-        s_start = s_start[0]
-        s_stop = tt.rows[i+1].s
-        s_stop = s_stop[0]
-        print(f"ELEMENT {i}: {element_name} || s={s_start:.3f}:{s_stop:.3f} m")
-
-        s_values[i+1] = s_stop
-
-        # Track through this single element
-        line.track(tracked_particles, ele_start=element_name, num_elements=1)
-        p_to_list = tracked_particles.copy()
-        p_to_list.sort(interleave_lost_particles=True)
-        particle_list.append(p_to_list)
-
-
-    return particle_list, s_values
-
-
+# Simple shifts array 
 def shifts_array_deterministic(shifts, element, setting, range_vals, magnet_settings=[490]):
     """ 
     Create a list of shifts for a given element and setting.
@@ -622,65 +626,6 @@ def shifts_array_deterministic(shifts, element, setting, range_vals, magnet_sett
             shifts_copy[element][setting] = val
             row.append(deepcopy(shifts_copy))
         shift_matrix.append(row)
-    return shift_matrix
-
-def shifts_array_random(shifts, shifts_range, n_samples, magnet_settings=[490], is_array = False):
-    """ 
-    Create a matrix of random shift configurations.
-    Each row corresponds to a different magnet setting.
-    Each column corresponds to a different random sample of shifts within the specified ranges.
-    Args:
-        shifts: Base shifts dictionary to copy and modify
-        shifts_range: Dictionary specifying the range for each element and setting to randomize
-                      e.g., {'q0': {'x': (-0.001, 0.001), 'y': (-0.001, 0.001)}, 'q1': {'ang_z': (-0.01, 0.01)}}
-        n_samples: Number of random samples to generate for each magnet setting
-        magnet_settings: List of magnet settings to iterate over
-    Returns:
-        shift_matrix: A 2D list where shift_matrix[magnet_idx][i] 
-            has magnetSettings=magnet_settings[magnet_idx]
-                      and is the i-th random sample of shifts within the specified ranges
-                      defined in shifts_range
-    """
-    # Generate random number for seeding
-    seed = np.random.randint(0, 100000)
-    if is_array:
-        shift_matrix = np.zeros((len(magnet_settings), n_samples, num_shifts), dtype=np.float32)
-        range_array = ranges_to_array(shifts_range, n=num_shifts_range)
-        for m_idx, mag_setting in enumerate(magnet_settings):
-            np.random.seed(seed)
-            shift_matrix[m_idx, :, 0] = mag_setting  # First column is magnet setting
-            for s_idx, lowhigh in enumerate(range_array):
-                # s_idx points to the setting in range_array, like s_idx=1 --> 'q0' 'x'
-                # go through each setting and generate n_samples random values within the specified range
-                low, high = lowhigh
-                if low != high:
-                    shift_matrix[m_idx, :, s_idx + 1] = np.random.uniform(low, high, size=n_samples)
-                else:
-                    shift_matrix[m_idx, :, s_idx + 1] = low  # If range is zero, just use the fixed value
-    else:
-        shift_matrix = []
-        for mag_setting in magnet_settings:
-            np.random.seed(seed)
-            row = [] # Each row corresponds to a magnet setting
-            shifts_copy = deepcopy(shifts)
-            shifts_copy['magnetSettings'] = mag_setting
-
-            # Generate n_samples random configurations corresponding to shift_ranges
-            for _ in range(n_samples):
-                shifts_sample = deepcopy(shifts_copy)
-                for element, settings in shifts_range.items(): 
-                    # element is like 'q0', settings is like {'x': (-0.001, 0.001), 'y': (-0.001, 0.001), ...}
-                    if type(settings) is not dict:
-                        continue  # Skip if settings is not a dictionary
-                    for position, rand_range in settings.items():
-                        # position is like 'x', min_val and max_val are the range limits
-                        if type(rand_range) != tuple or len(rand_range) != 2:
-                            continue  # Skip if range is not defined properly
-                        # Sample a random value within the specified range
-                        random_val = np.random.uniform(*rand_range)
-                        shifts_sample[element][position] = random_val
-                row.append(deepcopy(shifts_sample))
-            shift_matrix.append(row)
     return shift_matrix
 
 def histogram_mean_std(h, xedges, yedges, ax=None, threshold=3, point_threshold=30):
@@ -762,115 +707,6 @@ def plot_multiple_magnet_settings(shifts_orig, mag_settings, axs=None):
 
     plt.tight_layout()
 
-# %% +++++++++DataSET++++++++++++++++
-# 
-# Save histograms and shifts to HDF5 file
-def save_to_hdf5(histograms, shift_list, magnet_settings, xedges, yedges, 
-                 filename=histogram_dat, verbose=False):
-    if verbose:
-        start_time = time.time()
-        print(f"Starting HDF5 save to {filename}")
-    
-    with h5py.File(filename, 'w') as f:
-        # Store edges as global datasets
-        f.create_dataset('xedges', data=xedges)
-        f.create_dataset('yedges', data=yedges)
-        
-        # Create a group for each magnet setting
-        for magnet_idx, setting in enumerate(magnet_settings):
-            # Create main group for this magnet setting
-            group_name = f'magnet_{setting}'
-            magnet_group = f.create_group(group_name)
-            
-            magnet_group.create_dataset('shifts_array', data=shift_list[magnet_idx])        
-            magnet_group.create_dataset('histograms', data=histograms[magnet_idx])
-            magnet_group.attrs['magnetSettings'] = setting    
-    if verbose:
-        end_time = time.time()
-        print(f"HDF5 save completed in {end_time - start_time:.2f} seconds")
-
-def ranges_to_array(ranges, n):
-    r_arr = np.zeros((n,2), dtype=np.float32)
-    
-    def req_ranges_to_array(data, arr, idx):
-        for key, value in data.items():
-            if isinstance(value, dict):
-                idx = req_ranges_to_array(value, arr, idx)
-            elif isinstance(value, (list, tuple, int, float)):
-                arr[idx, :] = value
-                idx += 1
-        return idx
-
-    req_ranges_to_array(ranges, r_arr, 0)
-    return r_arr
-
-def shifts_to_array(shifts, n):
-    s_arr = np.zeros((n,), dtype=np.float32)
-    
-    def req_shifts_to_array(data, arr, idx):
-        for key, value in data.items():
-            if isinstance(value, dict):
-                idx = req_shifts_to_array(value, arr, idx)
-            else:
-                arr[idx] = value
-                idx += 1
-        return idx
-
-    req_shifts_to_array(shifts, s_arr, 0)
-    return s_arr
-
-def array_to_shifts(s_arr, shifts_template):
-    shifts = deepcopy(shifts_template)
-    
-    def req_array_to_shifts(arr, data, idx):
-        for key, value in data.items():
-            if isinstance(value, dict):
-                idx = req_array_to_shifts(arr, value, idx)
-            else:
-                data[key] = arr[idx]
-                idx += 1
-        return idx
-
-    req_array_to_shifts(s_arr, shifts, 0)
-    return shifts
-
-def normalize_batch_hists(hist_arr, std=False, minmax=True):
-    """
-    Normalize histograms in a batch array.
-    
-    Args:
-        hist_arr: Array of shape (n_batch, h_height, h_width) containing histograms
-    
-    Returns:
-        tuple: (z_normalized, minmax_normalized) where:
-            - z_normalized: Zero mean, unit std normalized histograms
-            - minmax_normalized: Min-max normalized histograms to [0,1]
-    """
-    # Z-score normalization (zero mean, unit std)
-    # norm = hist_arr.copy()
-    norm = hist_arr
-    if std:
-        for i in range(norm.shape[0]):
-            batch = norm[i]
-            mean = np.mean(batch)
-            std = np.std(batch)
-            if std > 0:  # Avoid division by zero
-                norm[i] = (batch - mean) / std
-            else:
-                norm[i] = batch - mean
-    
-    # Min-max normalization to [0,1]
-    if minmax:
-        for i in range(norm.shape[0]):
-            batch = norm[i]
-            min_val = np.min(batch)
-            max_val = np.max(batch)
-            if max_val > min_val:  # Avoid division by zero
-                norm[i] = (batch - min_val) / (max_val - min_val)
-            else:
-                norm[i] = np.zeros_like(batch)
-    
-    return norm
 
 # %% {PLotting {} FUNCTIONS}
 def twiss_plot(line, ref):
@@ -946,42 +782,6 @@ def twiss_plot(line, ref):
         ax.set_ylim(ylim)
 
     fig1.subplots_adjust(left=.15, right=.92, hspace=.27)
-        
-def track_line(line, particles):
-    # Track particles through each element and plot the divergence
-    tt = line.get_table()
-    elements_names = [el for el in line.element_names]
-
-    # Create a copy of the particles to track
-    tracked_particles = particles.copy()
-    # Initialize data structures to store particle coordinates
-
-    particle_dir = {'p': [tracked_particles.copy()], 
-                     's': [0.0],
-                     'names': ['start']
-                    }
-
-    # Track through each element individually
-    for i, element_name in enumerate(elements_names):
-        s_start = tt.rows[i].s
-        s_start = s_start[0]
-        s_stop = tt.rows[i+1].s
-        s_stop = s_stop[0]
-        print(f"ELEMENT {i}: {element_name} || s={s_start:.3f}:{s_stop:.3f} m")
-
-
-        # Track through this single element
-        line.track(tracked_particles, ele_start=element_name, num_elements=1)
-        if "a_" in element_name or "m" in element_name:
-            p_to_list = tracked_particles.copy()
-            p_to_list.sort(interleave_lost_particles=True)
-
-            particle_dir['p'].append(p_to_list)
-            particle_dir['s'].append(s_stop)
-            particle_dir['names'].append(element_name)
-
-
-    return particle_dir
 
 
 def plot_histogram(x, y, bins, title=""):
