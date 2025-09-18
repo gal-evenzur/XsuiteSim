@@ -44,7 +44,7 @@ def shifts_to_histogram(shift_list, ref=ref, filename=None, change_beam=False,
 
 
 # Save histograms and shifts to HDF5 file
-def save_to_hdf5(histograms, shift_list, magnet_settings, xedges, yedges, 
+def save_histogarms_hd5(histograms, shift_list, magnet_settings, xedges, yedges, 
                  filename=histogram_dat, verbose=False):
     if verbose:
         start_time = time.time()
@@ -62,8 +62,7 @@ def save_to_hdf5(histograms, shift_list, magnet_settings, xedges, yedges,
         end_time = time.time()
         print(f"HDF5 save completed in {end_time - start_time:.2f} seconds")
 
-
-def import_histogram_data(filename=histogram_dat):
+def import_histograms_hd5(filename=histogram_dat):
     with h5py.File(filename, 'r') as f:
         xedges = f['xedges'][:]
         yedges = f['yedges'][:]
@@ -72,7 +71,7 @@ def import_histogram_data(filename=histogram_dat):
         shifts_list = f['shifts_list'][:]
     return xedges, yedges, magnet_settings, histograms, shifts_list
 
-
+# CREATE SHIFT LIST:--
 def ranges_to_array(ranges, n):
     r_arr = np.zeros((n,2), dtype=np.float32)
     
@@ -118,8 +117,6 @@ def array_to_shifts(s_arr, shifts_template):
     req_array_to_shifts(s_arr, shifts, 0)
     return shifts
 
-
-# RANDOMAZATION MASTER
 def shifts_array_random(shifts, shifts_range, n_samples, magnet_settings=[490], is_array = False):
     """ 
     Create a matrix of random shift configurations.
@@ -179,7 +176,23 @@ def shifts_array_random(shifts, shifts_range, n_samples, magnet_settings=[490], 
             shift_matrix.append(row)
     return shift_matrix
 
+# Processing functions:--
+def is_valid(h, threshold=2, point_threshold=10, verbose=False):
+    h = h.copy()
+    mask = h > threshold
+    h = np.where(mask, h, 0)
 
+    h_flat = h.flatten()
+    mask = h_flat > 0
+
+    # Check if we have enough relevant points above the threshold
+    if np.sum(mask) <= point_threshold:
+        if verbose: print("Error: Not enough data points above threshold")
+        return False
+    else:
+        return True    
+    
+        
 
 
 def normalize_batch_hists(hist_arr, std=False, minmax=True):
@@ -221,11 +234,12 @@ def normalize_batch_hists(hist_arr, std=False, minmax=True):
     return norm
 
 
-def plot_shift_array(shift_list, magnet_settings, n_max=5, name='q0', setting='x', verbose=False):
+# Plotting functions:--
+def plot_shift_array(shift_list, magnet_settings, normalize=False, n_max=5, name='q0', setting='x', verbose=False):
 
     histograms, xedges, yedges = shifts_to_histogram(shift_list, filename=dat_file, change_beam=False,
                                                       verbose=verbose, 
-                                                      normalize=True, std=False, minmax=True)
+                                                      normalize=normalize, std=False, minmax=True)
     # Plot the histograms
 
     fig, axs = plt.subplots(len(shift_list), min(len(shift_list[0]), n_max), figsize=(len(magnet_settings)*6, 5), 
@@ -277,10 +291,10 @@ def plot_shift_array(shift_list, magnet_settings, n_max=5, name='q0', setting='x
 
 def plot_from_file(histograms=None, shift_list=None, xedges=None, yedges=None, magnet_settings=None,
                     filename=histogram_dat,
-                    n_max=5, name='q0', setting='x', verbose=False):
+                    n_max=5, name='q0', setting='x', verbose=False, fft=False):
 
     if histograms is None or shift_list is None or xedges is None or yedges is None or magnet_settings is None:
-        xedges, yedges, magnet_settings, histograms, shift_list = import_histogram_data(filename)
+        xedges, yedges, magnet_settings, histograms, shift_list = import_histograms_hd5(filename)
     # Plot the histograms
 
     fig, axs = plt.subplots(len(shift_list), min(len(shift_list[0]), n_max), figsize=(len(magnet_settings)*6, 5), 
@@ -295,38 +309,41 @@ def plot_from_file(histograms=None, shift_list=None, xedges=None, yedges=None, m
             h = histograms[magnet_idx][i]
             ax.imshow(h, origin='lower', extent=[xedges[0], xedges[-1], yedges[0], yedges[-1]], aspect='auto')
             change = shift[name][setting]
-            ax.set_title(f'{magnet_settings[magnet_idx]} {name} {setting} = {change*1e3:.2f} mm')
+            valid = is_valid(h)
+            ax.set_title(f'{magnet_settings[magnet_idx]} {name} {setting} = {change*1e3:.2f} mm\n Valid: {valid}')
 
             ax.xaxis.set_minor_locator(AutoMinorLocator(10))
             ax.yaxis.set_minor_locator(AutoMinorLocator(10))
             ax.grid(True,linewidth=0.25,alpha=0.25,which='major')
             if verbose: print(f"{m}: Finished plotting change ", i+1, " of ", len(shift_list))
     # Create FFT plot
-    fig_fft, axs_fft = plt.subplots(len(shift_list), len(shift_list[0]), figsize=(len(magnet_settings)*6, 5), 
-                                    tight_layout=True, sharex=True, sharey=True)
 
-    for magnet_idx, m in enumerate(magnet_settings):
-        for i, shift in enumerate(shift_list[magnet_idx]):
-            if is_array:
-                shift = array_to_shifts(shift, shifts_template=shifts)
-            
-            ax_fft = axs_fft[magnet_idx, i]
-            h = histograms[magnet_idx][i]
-            
-            # Compute 2D FFT
-            fft_h = np.fft.fft2(h)
-            fft_h_shifted = np.fft.fftshift(fft_h)
-            magnitude = np.abs(fft_h_shifted)
-            
-            # Plot FFT magnitude (log scale for better visualization)
-            im = ax_fft.imshow(np.log(magnitude + 1), origin='lower', aspect='auto')
-            
-            change = shift[name][setting]
-            ax_fft.set_title(f'FFT: {magnet_settings[magnet_idx]} {name} {setting} = {change*1e3:.2f} mm')
-            
-            ax_fft.xaxis.set_minor_locator(AutoMinorLocator(10))
-            ax_fft.yaxis.set_minor_locator(AutoMinorLocator(10))
-            ax_fft.grid(True,linewidth=0.25,alpha=0.25,which='major')
+    if fft:
+        fig_fft, axs_fft = plt.subplots(len(shift_list), len(shift_list[0]), figsize=(len(magnet_settings)*6, 5), 
+                                        tight_layout=True, sharex=True, sharey=True)
+
+        for magnet_idx, m in enumerate(magnet_settings):
+            for i, shift in enumerate(shift_list[magnet_idx]):
+                if is_array:
+                    shift = array_to_shifts(shift, shifts_template=shifts)
+                
+                ax_fft = axs_fft[magnet_idx, i]
+                h = histograms[magnet_idx][i]
+                
+                # Compute 2D FFT
+                fft_h = np.fft.fft2(h)
+                fft_h_shifted = np.fft.fftshift(fft_h)
+                magnitude = np.abs(fft_h_shifted)
+                
+                # Plot FFT magnitude (log scale for better visualization)
+                im = ax_fft.imshow(np.log(magnitude + 1), origin='lower', aspect='auto')
+                
+                change = shift[name][setting]
+                ax_fft.set_title(f'FFT: {magnet_settings[magnet_idx]} {name} {setting} = {change*1e3:.2f} mm')
+                
+                ax_fft.xaxis.set_minor_locator(AutoMinorLocator(10))
+                ax_fft.yaxis.set_minor_locator(AutoMinorLocator(10))
+                ax_fft.grid(True,linewidth=0.25,alpha=0.25,which='major')
 
     return histograms, xedges, yedges
 

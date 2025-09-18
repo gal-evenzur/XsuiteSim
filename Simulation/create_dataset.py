@@ -25,8 +25,11 @@ magnet_settings = [490, 490.1]
 shift_list = shifts_array_random(shifts, shifts_range, 5, magnet_settings=magnet_settings, is_array=is_array)
 
 
-histograms, xedges, yedges = plot_shift_array(shift_list, magnet_settings, name=name, setting=setting, verbose=False)
+# histograms, xedges, yedges = plot_shift_array(shift_list, magnet_settings, name=name, setting=setting, verbose=False,
+#                                               normalize=False)
 # plt.show()
 
+histograms, xedges, yedges = shifts_to_histogram(shift_list, filename=dat_file, verbose=False)
+
 # Save the data
-save_to_hdf5(histograms, shift_list, magnet_settings, xedges, yedges, verbose=False)
+save_histogarms_hd5(histograms, shift_list, magnet_settings, xedges, yedges, verbose=False)
