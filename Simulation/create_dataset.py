@@ -29,7 +29,14 @@ shift_list = shifts_array_random(shifts, shifts_range, 5, magnet_settings=magnet
 #                                               normalize=False)
 # plt.show()
 
-histograms, xedges, yedges = shifts_to_histogram(shift_list, filename=dat_file, verbose=False)
+# histograms, xedges, yedges = shifts_to_histogram(shift_list, filename=dat_file, verbose=True,
+#                                                  change_beam=True, normalize=False, std=False, minmax=True)
+
+histograms, xedges, yedges = rand_from_scratch_histogram(shifts_template=shifts, shifts_range=shifts_range,
+                                                         particles_file=dat_file,
+                                                         n_batch=5, magnet_settings=magnet_settings,
+                                                         verbose=True,
+                                                         change_beam=False, normalize=False, std=False, minmax=True)
 
 # Save the data
 save_histogarms_hd5(histograms, shift_list, magnet_settings, xedges, yedges, verbose=False)

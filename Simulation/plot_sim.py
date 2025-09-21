@@ -23,6 +23,7 @@ plot_from_file(filename=histogram_dat)
 h = histograms.copy()
 threshold = 2
 h = np.where(h > threshold, h, 0)
-plot_from_file(h, shift_list=shifts_list, magnet_settings=magnet_settings, xedges=xedges, yedges=yedges)
+plot_from_file(h, shift_list=shifts_list, magnet_settings=magnet_settings, xedges=xedges, yedges=yedges,
+               name='beam', setting='fy0')
 
 plt.show()
