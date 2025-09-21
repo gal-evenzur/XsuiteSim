@@ -14,11 +14,11 @@ plt.rcParams['image.cmap'] = 'afmhot'
 # plt.rcParams['image.cmap'] = 'copper'
 
 ctx = xo.ContextCpu()  # Use xo.ContextCupy() for GPU
+split = 'val'
 
+xedges, yedges, magnet_settings, histograms, shifts_list = import_histograms_hd5(histogram_dat, split=split)
 
-xedges, yedges, magnet_settings, histograms, shifts_list = import_histograms_hd5(histogram_dat)
-
-plot_from_file(filename=histogram_dat)
+plot_from_file(filename=histogram_dat, split=split)
 
 h = histograms.copy()
 threshold = 2

@@ -2,8 +2,6 @@ from sim_functions import *
 from params import *
 
 
-# %% +++++++++DataSET++++++++++++++++
-
 def rand_from_scratch_histogram(shifts_template, shifts_range, n_batch, ref=ref, magnet_settings=[490], particles_file=None,
                                 change_beam=False, normalize=False, std=False, minmax=True,
                                 max_attempts=10,
@@ -19,6 +17,7 @@ def rand_from_scratch_histogram(shifts_template, shifts_range, n_batch, ref=ref,
     width = monitor_bins[1]
     n_magnet_settings = len(magnet_settings)
     histograms = np.zeros((n_magnet_settings, n_batch, width, height))
+    shift_matrix = np.zeros((len(magnet_settings), n_batch, num_shifts), dtype=np.float32)
 
 
     for i in range(n_batch):
@@ -46,12 +45,14 @@ def rand_from_scratch_histogram(shifts_template, shifts_range, n_batch, ref=ref,
                     break  # No need to check further if one is invalid
         
                 histograms[magnet_idx, i] = h.T  # Transpose to match the orientation
+                s_array_form = shifts_to_array(shift, n=num_shifts)
+                shift_matrix[magnet_idx, i] = s_array_form
     if normalize:
         for magnet_idx in range(n_magnet_settings):
             histograms[magnet_idx] = normalize_batch_hists(histograms[magnet_idx], std=std, minmax=minmax)
             if verbose: print(f"Normalized histograms for magnet setting {magnet_idx+1}/{n_magnet_settings}")
 
-    return histograms, xedges, yedges
+    return shift_matrix, histograms, xedges, yedges
 
 
 # Save multiple histograms for a shift list
@@ -111,31 +112,33 @@ def shifts_to_histogram(shift_list, ref=ref, filename=None, change_beam=False,
 
 
 # Save histograms and shifts to HDF5 file
-def save_histogarms_hd5(histograms, shift_list, magnet_settings, xedges, yedges, 
+def save_histogarms_hd5(histograms, shift_list, magnet_settings, xedges, yedges, dataset="train", write_add='w',
                  filename=histogram_dat, verbose=False):
     if verbose:
         start_time = time.time()
         print(f"Starting HDF5 save to {filename}")
-    
-    with h5py.File(filename, 'w') as f:
-        # Store edges as global datasets
-        f.create_dataset('xedges', data=xedges)
-        f.create_dataset('yedges', data=yedges)
 
-        f.create_dataset('magnet_settings', data=magnet_settings)
-        f.create_dataset('shifts_list', data=shift_list)
-        f.create_dataset('histograms', data=histograms)
+    with h5py.File(filename, write_add) as f:
+        # Store edges as global datasets
+        if write_add == 'w':
+            f.create_dataset('xedges', data=xedges)
+            f.create_dataset('yedges', data=yedges)
+        set = f.create_group(dataset)
+
+        set.create_dataset('magnet_settings', data=magnet_settings)
+        set.create_dataset('shifts_list', data=shift_list)
+        set.create_dataset('histograms', data=histograms)
     if verbose:
         end_time = time.time()
         print(f"HDF5 save completed in {end_time - start_time:.2f} seconds")
 
-def import_histograms_hd5(filename=histogram_dat):
+def import_histograms_hd5(filename=histogram_dat, split='train'):
     with h5py.File(filename, 'r') as f:
         xedges = f['xedges'][:]
         yedges = f['yedges'][:]
-        magnet_settings = f['magnet_settings'][:]
-        histograms = f['histograms'][:]
-        shifts_list = f['shifts_list'][:]
+        magnet_settings = f[f'{split}/magnet_settings'][:]
+        histograms = f[f'{split}/histograms'][:]
+        shifts_list = f[f'{split}/shifts_list'][:]
     return xedges, yedges, magnet_settings, histograms, shifts_list
 
 # CREATE SHIFT LIST:--
@@ -357,11 +360,11 @@ def plot_shift_array(shift_list, magnet_settings, normalize=False, n_max=5, name
     return histograms, xedges, yedges
 
 def plot_from_file(histograms=None, shift_list=None, xedges=None, yedges=None, magnet_settings=None,
-                    filename=histogram_dat,
+                    filename=histogram_dat, split='train',
                     n_max=5, name='q0', setting='x', verbose=False, fft=False):
 
     if histograms is None or shift_list is None or xedges is None or yedges is None or magnet_settings is None:
-        xedges, yedges, magnet_settings, histograms, shift_list = import_histograms_hd5(filename)
+        xedges, yedges, magnet_settings, histograms, shift_list = import_histograms_hd5(filename, split=split)
     # Plot the histograms
 
     fig, axs = plt.subplots(len(shift_list), min(len(shift_list[0]), n_max), figsize=(len(magnet_settings)*6, 5), 
@@ -374,7 +377,7 @@ def plot_from_file(histograms=None, shift_list=None, xedges=None, yedges=None, m
             if verbose: print(f"{m}: Started plotting change ", i+1, " of ", len(shift_list[magnet_idx]))
             ax = axs[magnet_idx, i]
             h = histograms[magnet_idx][i]
-            ax.imshow(h, origin='lower', extent=[xedges[0], xedges[-1], yedges[0], yedges[-1]], aspect='auto')
+            im = ax.imshow(h, origin='lower', extent=[xedges[0], xedges[-1], yedges[0], yedges[-1]], aspect='auto')
             change = shift[name][setting]
             valid = is_valid(h)
             ax.set_title(f'{magnet_settings[magnet_idx]} {name} {setting} = {change*1e3:.2f} mm\n Valid: {valid}')
@@ -382,6 +385,7 @@ def plot_from_file(histograms=None, shift_list=None, xedges=None, yedges=None, m
             ax.xaxis.set_minor_locator(AutoMinorLocator(10))
             ax.yaxis.set_minor_locator(AutoMinorLocator(10))
             ax.grid(True,linewidth=0.25,alpha=0.25,which='major')
+            plt.colorbar(im, ax=ax)
             if verbose: print(f"{m}: Finished plotting change ", i+1, " of ", len(shift_list))
     # Create FFT plot
 
