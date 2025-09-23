@@ -7,7 +7,7 @@ def rand_from_scratch_histogram(shifts_template, shifts_range, n_batch, ref=ref,
                                 max_attempts=10,
                                 verbose=False, monitor_bins=monitor_bins):
     if particles_file is None or change_beam:
-        states = generate_secondary_particles(shifts_template, n_batch, verbose=verbose)
+        states = generate_secondary_particles(shifts_template, n_particles, verbose=verbose)
         particles = particles_from_states(states, ref, verbose=verbose)
     else:
         particles = import_particles_from_hdf5(particles_file, ref, verbose=verbose)
@@ -172,6 +172,17 @@ def shifts_to_array(shifts, n):
     req_shifts_to_array(shifts, s_arr, 0)
     return s_arr
 
+def shift_list_to_matrix(shift_list, n):
+    n_magnet_settings = len(shift_list)
+    n_changes = len(shift_list[0])
+    shift_matrix = np.zeros((n_magnet_settings, n_changes, n), dtype=np.float32)
+
+    for magnet_idx in range(n_magnet_settings):
+        for i, shift in enumerate(shift_list[magnet_idx]):
+            s_array_form = shifts_to_array(shift, n=n)
+            shift_matrix[magnet_idx, i] = s_array_form
+    return shift_matrix
+
 def array_to_shifts(s_arr, shifts_template):
     shifts = deepcopy(shifts_template)
     
@@ -306,7 +317,10 @@ def normalize_batch_hists(hist_arr, std=False, minmax=True):
 
 # Plotting functions:--
 def plot_shift_array(shift_list, magnet_settings, normalize=False, n_max=5, name='q0', setting='x', verbose=False):
-
+    '''
+    Assumes that shift_list is in array form!!
+    '''
+    
     histograms, xedges, yedges = shifts_to_histogram(shift_list, filename=dat_file, change_beam=True,
                                                       verbose=verbose, 
                                                       normalize=normalize, std=False, minmax=True)
@@ -362,20 +376,29 @@ def plot_shift_array(shift_list, magnet_settings, normalize=False, n_max=5, name
 def plot_from_file(histograms=None, shift_list=None, xedges=None, yedges=None, magnet_settings=None,
                     filename=histogram_dat, split='train',
                     n_max=5, name='q0', setting='x', verbose=False, fft=False):
+    '''
+    Assumes that histograms, shift_list, xedges, yedges, magnet_settings are all None or all provided.
+    Assume that shift_list is in array form!!
+    '''
 
     if histograms is None or shift_list is None or xedges is None or yedges is None or magnet_settings is None:
         xedges, yedges, magnet_settings, histograms, shift_list = import_histograms_hd5(filename, split=split)
     # Plot the histograms
-
-    fig, axs = plt.subplots(len(shift_list), min(len(shift_list[0]), n_max), figsize=(len(magnet_settings)*6, 5), 
+    n_changes = min(len(shift_list[0]), n_max)
+    fig, axs = plt.subplots(len(shift_list), n_changes, figsize=(len(magnet_settings)*6, 5), 
                             tight_layout=True, sharex=True, sharey=True)
 
     for magnet_idx, m in enumerate(magnet_settings):
-        for i, shift in enumerate(shift_list[magnet_idx]):
-            if is_array:
-                shift = array_to_shifts(shift, shifts_template=shifts)
+        for i in range(n_changes):
+            shift = shift_list[magnet_idx][i]
+            shift = array_to_shifts(shift, shifts_template=shifts)
             if verbose: print(f"{m}: Started plotting change ", i+1, " of ", len(shift_list[magnet_idx]))
-            ax = axs[magnet_idx, i]
+            if len(shift_list) == 1:
+                ax = axs[i]
+            elif n_changes == 1:
+                ax = axs[magnet_idx]
+            else:
+                ax = axs[magnet_idx, i]
             h = histograms[magnet_idx][i]
             im = ax.imshow(h, origin='lower', extent=[xedges[0], xedges[-1], yedges[0], yedges[-1]], aspect='auto')
             change = shift[name][setting]

@@ -14,7 +14,7 @@ plt.rcParams['image.cmap'] = 'afmhot'
 # plt.rcParams['image.cmap'] = 'copper'
 
 ctx = xo.ContextCpu()  # Use xo.ContextCupy() for GPU
-split = 'val'
+split = 'test'
 
 xedges, yedges, magnet_settings, histograms, shifts_list = import_histograms_hd5(histogram_dat, split=split)
 
@@ -25,5 +25,7 @@ threshold = 2
 h = np.where(h > threshold, h, 0)
 plot_from_file(h, shift_list=shifts_list, magnet_settings=magnet_settings, xedges=xedges, yedges=yedges,
                name='beam', setting='fy0')
+
+# NEED TO CHECK IF shifts are correctly imported and lead to the same histograms
 
 plt.show()

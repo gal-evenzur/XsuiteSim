@@ -36,7 +36,7 @@ num_shifts_range = count_numeric_values(shifts_range)
 
 
 MagnetSettings = shifts['magnetSettings']
-n_particles = 1e6
+n_particles = 1e5
 show_dead = True
 use_integration = True
 is_array = True
@@ -97,13 +97,19 @@ MM      = 9.109e-31 ## kg, positron
 QQ      = +1  ## unit charge, positron
 mGeV    = (MM*u['c2'])/u['GeV_to_kgm2s2'] ## GeV
 E_GeV   = 10 # GeV, energy of primary partticles
-Emin    = 1 ## GeV
-Emax    = 6 ## GeV
-smearT  = True
-smearP  = True
-smear_sigma_T_um  = 0.3 ## um
-smear_sigma_P_GeV = 1.5e-3 ## GeV
+Emin    = 1e-2 ## GeV
+Emax    = 10 ## GeV
+smear_T  = False
+smear_pT  = True
+smear_sigma_T_um  = 0 ## um
+smear_sigma_P_GeV = 1e-4 ## GeV (=100 keV)
 ZMAX    = 18 ## METERES
 tmax    = ZMAX / (0.99 * u['c']) ### time range for propagation (seconds): approximate time to travel 18 meters (last detector is at ~18 meters, relativistic particles going ~c)
 t_span  = (0, tmax)
 max_dt  = 1e-9
+
+import bremss as br
+X0   = 35.3  if(shifts['magnetSettings']==502) else 8.897 # cm for Beryllium of Aluminum
+t_cm = 0.005 if(shifts['magnetSettings']==502) else 0.01 # cm (50 or 100 µm)
+E_vals, photons, eplus = br.build_pdfs(0.01,E_GeV,X0,t_cm)
+

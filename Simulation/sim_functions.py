@@ -5,6 +5,7 @@ from matplotlib.colors import LogNorm
 import h5py
 import xtrack as xt
 import xpart as xp
+import bremss as br
 from params import *
 from copy import deepcopy
 import time
@@ -110,7 +111,7 @@ def generate_secondary_particles(shifts, n_particles, verbose=True):
     for i, state in enumerate(states):
         primary_state_at_foil = propagate_state_in_vacuum_to_z(state,Z0_m)
         primary_states_at_foil.append(primary_state_at_foil)
-        secondary_state_at_foil = simulate_secondary_production(primary_state_at_foil,q=+1,Emin=0.5,Emax=5,smear_T=True,smear_pT=True)
+        secondary_state_at_foil = simulate_secondary_production(primary_state_at_foil,q=+1,Emin=Emin,Emax=Emax,smear_T=smear_T,smear_pT=smear_pT)
         secondary_states_at_foil.append(secondary_state_at_foil)
         if verbose and i%10000 == 0:
             print(f"created {i} particles")
@@ -305,8 +306,15 @@ def simulate_secondary_production(primary_state,q=+1,Emin=0.5,Emax=5,smear_T=Fal
     if(smear_pT):
         px = px + np.random.normal(0,smear_sigma_P_GeV) 
         py = py + np.random.normal(0,smear_sigma_P_GeV)
-    ### sample energy from exponential
-    E = truncated_exp_NK(Emin,Emax,1) if(Emax>Emin) else Emin # GeV
+    
+    ### sample energy like in bremss
+
+    # E = truncated_exp_NK(Emin,Emax, 1) if(Emax>Emin) else Emin # GeV
+    E = br.sample_from_pdf_on_bins(E_vals, eplus, nsamples=1)
+    while(E[0]<Emin or E[0]>Emax): E = br.sample_from_pdf_on_bins(E_vals, eplus, nsamples=1)
+    E = E[0]
+
+
     ### assume the x-y momemnta staty the same and correct the z momentum
     pz = np.sqrt( E**2 - mass**2 - px**2 - py**2 ) # GeV
     secondary_state = [x,y,z, px,py,pz, mass, q]
