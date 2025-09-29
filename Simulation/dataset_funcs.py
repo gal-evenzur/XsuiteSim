@@ -1,11 +1,13 @@
 from sim_functions import *
 from params import *
+import time
 
 
 def rand_from_scratch_histogram(shifts_template, shifts_range, n_batch, ref=ref, magnet_settings=[490], particles_file=None,
                                 change_beam=False, normalize=False, std=False, minmax=True,
                                 max_attempts=10,
                                 verbose=False, monitor_bins=monitor_bins):
+    
     if particles_file is None or change_beam:
         states = generate_secondary_particles(shifts_template, n_particles, verbose=verbose)
         particles = particles_from_states(states, ref, verbose=verbose)
@@ -24,7 +26,8 @@ def rand_from_scratch_histogram(shifts_template, shifts_range, n_batch, ref=ref,
         valid = False
         attempt = 0
 
-        while (not valid) and (attempt < max_attempts):
+        hist_start_time = time.time()
+        while (not valid):
             attempt += 1
             if attempt > 1:
                 if verbose: print(f"  Attempt {attempt} for batch {i+1}/{n_batch}")
@@ -47,12 +50,18 @@ def rand_from_scratch_histogram(shifts_template, shifts_range, n_batch, ref=ref,
                 histograms[magnet_idx, i] = h.T  # Transpose to match the orientation
                 s_array_form = shifts_to_array(shift, n=num_shifts)
                 shift_matrix[magnet_idx, i] = s_array_form
+                
+        if verbose:
+            hist_end_time = time.time()
+            print(f"Histogram {i+1}/{n_batch} for magnet setting {magnet_settings[magnet_idx]} took {hist_end_time - hist_start_time:.2f} seconds")
+                    
     if normalize:
         for magnet_idx in range(n_magnet_settings):
             histograms[magnet_idx] = normalize_batch_hists(histograms[magnet_idx], std=std, minmax=minmax)
             if verbose: print(f"Normalized histograms for magnet setting {magnet_idx+1}/{n_magnet_settings}")
 
     return shift_matrix, histograms, xedges, yedges
+
 
 
 # Save multiple histograms for a shift list
@@ -373,17 +382,9 @@ def plot_shift_array(shift_list, magnet_settings, normalize=False, n_max=5, name
 
     return histograms, xedges, yedges
 
-def plot_from_file(histograms=None, shift_list=None, xedges=None, yedges=None, magnet_settings=None,
-                    filename=histogram_dat, split='train',
-                    n_max=5, name='q0', setting='x', verbose=False, fft=False):
-    '''
-    Assumes that histograms, shift_list, xedges, yedges, magnet_settings are all None or all provided.
-    Assume that shift_list is in array form!!
-    '''
-
-    if histograms is None or shift_list is None or xedges is None or yedges is None or magnet_settings is None:
-        xedges, yedges, magnet_settings, histograms, shift_list = import_histograms_hd5(filename, split=split)
-    # Plot the histograms
+def plot(xedges, yedges, magnet_settings, histograms, shift_list,
+         pdfname=None,
+        split='train', n_max=5, name='q0', setting='x', verbose=False, fft=False):
     n_changes = min(len(shift_list[0]), n_max)
     fig, axs = plt.subplots(len(shift_list), n_changes, figsize=(len(magnet_settings)*6, 5), 
                             tight_layout=True, sharex=True, sharey=True)
@@ -410,6 +411,11 @@ def plot_from_file(histograms=None, shift_list=None, xedges=None, yedges=None, m
             ax.grid(True,linewidth=0.25,alpha=0.25,which='major')
             plt.colorbar(im, ax=ax)
             if verbose: print(f"{m}: Finished plotting change ", i+1, " of ", len(shift_list))
+
+    if pdfname is not None:
+        fig.savefig(pdfname)
+        if verbose: print(f"Saved histogram figure to {pdfname}")
+
     # Create FFT plot
 
     if fft:
@@ -440,5 +446,29 @@ def plot_from_file(histograms=None, shift_list=None, xedges=None, yedges=None, m
                 ax_fft.grid(True,linewidth=0.25,alpha=0.25,which='major')
 
     return histograms, xedges, yedges
+
+  
+
+
+def plot_from_file(filename, pdf=True, 
+                    split='train',
+                    n_max=5, name='q0', setting='x', verbose=False, fft=False):
+    '''
+    Assumes that histograms, shift_list, xedges, yedges, magnet_settings are all None or all provided.
+    Assume that shift_list is in array form!!
+    '''
+
+    xedges, yedges, magnet_settings, histograms, shift_list = import_histograms_hd5(filename, split=split)
+    # Plot the histograms
+
+    if pdf:
+        pdfname = filename.replace('.h5', f'_{split}.pdf')
+    else:
+        pdfname = None
+
+    plot(xedges, yedges, magnet_settings, histograms, shift_list,
+         pdfname=pdfname,
+         split=split, n_max=n_max, name=name, setting=setting, verbose=verbose, fft=fft)
+
 
 

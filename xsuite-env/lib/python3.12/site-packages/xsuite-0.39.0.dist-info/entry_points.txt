@@ -1,0 +1,2 @@
+[console_scripts]
+xsuite-prebuild = xsuite.cli:main

@@ -6,3 +6,10 @@ Data/
 Learning/xpart
 Learning/xtrack
 *.pdf
+logs/
+*.hd5
+*.ER
+*.OU
+Data/
+*.pyc
+

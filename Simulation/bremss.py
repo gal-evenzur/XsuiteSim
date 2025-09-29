@@ -1,5 +1,6 @@
 import numpy as np
 from scipy.integrate import quad
+import time
 import matplotlib.pyplot as plt
 
 # --- Bethe-Heitler approximations ---
@@ -42,9 +43,7 @@ def build_pdfs(Emin,Emax, X0=8.897, t_cm=0.01, npts=400):
     return E_vals, photon_vals, eplus_vals
 
 # --- Correct sampling on bins ---
-def sample_from_pdf_on_bins(E_vals, pdf_vals, nsamples=10000, rng=None, sample_log_within_bin=False):
-    if rng is None:
-        rng = np.random.default_rng()
+def sample_from_pdf_on_bins(E_vals, pdf_vals, nsamples=10000, sample_log_within_bin=False, Emin=0.1, Emax=10):
 
     # construct edges
     edges = np.zeros(len(E_vals) + 1)
@@ -58,12 +57,12 @@ def sample_from_pdf_on_bins(E_vals, pdf_vals, nsamples=10000, rng=None, sample_l
     p_bin /= p_bin.sum()
 
     cdf = np.cumsum(p_bin)
-    rnd = rng.random(nsamples)
+    rnd = np.random.random(nsamples)
     bin_indices = np.searchsorted(cdf, rnd, side='right')
     bin_indices = np.clip(bin_indices, 0, len(E_vals)-1)
 
-    u = rng.random(nsamples)
-    samples = np.empty(nsamples)
+    u = np.random.random(nsamples)
+    samples = np.zeros(nsamples)
     for i, b in enumerate(bin_indices):
         lo, hi = edges[b], edges[b+1]
         if sample_log_within_bin:
@@ -88,27 +87,34 @@ if __name__ == "__main__":
     XoverX0 = t_cm/X0
     Emin = 0.01 # GeV
     # Emin = 0.5 # GeV
-    Emax = 10 # GeV
+    Emax = 5 # GeV
 
     E_vals, photons, eplus = build_pdfs(Emin,Emax, X0, t_cm)
 
-    nsamples = 1000000
-    rng = np.random.default_rng(123)
-    sampled_photons = sample_from_pdf_on_bins(E_vals, photons, nsamples, rng)
-    sampled_eplus   = sample_from_pdf_on_bins(E_vals, eplus, nsamples, rng)
+    nsamples = int(1e5)
+    sampled_photons = sample_from_pdf_on_bins(E_vals, photons, nsamples)
+    start_time = time.time()
+    sampled_eplus = np.empty(nsamples)
+    for i in range(nsamples):
+        E = sample_from_pdf_on_bins(E_vals, eplus, 1)
 
+        while(E[0]<Emin or E[0]>Emax): E = sample_from_pdf_on_bins(E_vals, eplus, 1)
+        sampled_eplus[i] = E[0]
+
+    end_time = time.time()
+    print(f"Sampled {nsamples} e+ in {end_time - start_time:.2f} seconds")
     # bins = np.logspace(np.log10(E_vals[0]), np.log10(E0), 100)
     bins = np.linspace(E_vals[0], Emax, 400) # linear bins
 
     for samples, label, color in [
-        (sampled_photons, "γ samples", "C0"),
+        (sampled_photons, "gamma samples", "C0"),
         (sampled_eplus,   "e+ samples", "C1"),
     ]:
         centers, density, _ = normalized_hist_density(samples, bins)
         plt.step(centers, density, where="mid", label=label, color=color)
 
     # Overlay analytic PDFs
-    plt.plot(E_vals, photons, "--", lw=1.5, color="C0", label="γ PDF")
+    plt.plot(E_vals, photons, "--", lw=1.5, color="C0", label="gamma PDF")
     plt.plot(E_vals, eplus,   "--", lw=1.5, color="C1", label="e+ PDF")
 
     # plt.xscale("log")
