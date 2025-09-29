@@ -9,7 +9,7 @@ import os
 plt.rcParams['image.cmap'] = 'afmhot'
 # plt.rcParams['image.cmap'] = 'copper'
 
-split = 'val'
+split = 'train'
 import os
 
 try:
