@@ -9,16 +9,18 @@ import os
 plt.rcParams['image.cmap'] = 'afmhot'
 # plt.rcParams['image.cmap'] = 'copper'
 
-split = 'train'
+split = 'val'
 import os
 
 try:
     idx = int(sys.argv[1])
+    datafile_path = sys.argv[2]
 except:
     idx = 0
-pydir = os.path.dirname(os.path.abspath(__file__)) # This results ""
-simdir = os.path.dirname(pydir)
-datafile_path = f"{simdir}/Data/h_{idx}.h5"
+    pydir = os.path.dirname(os.path.abspath(__file__)) # This results ""
+    simdir = os.path.dirname(pydir)
+    datafile_path = f"{simdir}/Data/h_{idx}.h5"
+print(f"Plotting {datafile_path}")
 
 cutoff_path = datafile_path.replace('.h5', f'_cutoff_{split}.pdf')
 xedges, yedges, magnet_settings, histograms, shifts_list = import_histograms_hd5(datafile_path, split=split)

@@ -12,4 +12,4 @@ logs/
 *.OU
 Data/
 *.pyc
-
+xsuite-env/

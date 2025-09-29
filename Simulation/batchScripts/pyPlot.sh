@@ -15,7 +15,9 @@ cd ${BASEPATH}
 source setup.sh
 ### Running the Job ###
 ### =============== ###
+# DATAPATH=${BASEPATH}/merged_data/merged_data.h5
+DATAPATH=${BASEPATH}/Data/h_${idx}.h5
 
 cd Simulation/
 echo "Python initiate"
-python3 plot_sim.py ${idx}
+python3 plot_sim.py ${idx} ${DATAPATH}

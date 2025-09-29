@@ -105,7 +105,7 @@ def merge_hdf5_files(input_files: List[str], output_file: str, verbose: bool = T
                         if 'shifts_list' in dataset:
                             merged_data[dataset_name]['shifts_list'].append(dataset['shifts_list'][:])
                         if 'magnet_settings' in dataset:
-                            merged_data[dataset_name]['magnet_settings'].append(dataset['magnet_settings'][:])
+                            merged_data[dataset_name]['magnet_settings'] = dataset['magnet_settings'][:]
                     else:
                         if verbose:
                             print(f"Warning: Dataset '{dataset_name}' not found in {file_path}")
@@ -128,17 +128,20 @@ def merge_hdf5_files(input_files: List[str], output_file: str, verbose: bool = T
             if any(len(merged_data[dataset_name][key]) > 0 for key in merged_data[dataset_name]):
                 group = f.create_group(dataset_name)
                 
+                hist_list = merged_data[dataset_name]['histograms']
+                shift_list = merged_data[dataset_name]['shifts_list']
+                magnet_settings = merged_data[dataset_name]['magnet_settings']
+
+                group.create_dataset('magnet_settings', data=magnet_settings)
+                group.create_dataset('histograms', data=np.concatenate(hist_list, axis=1) if hist_list else np.array([]))
+                group.create_dataset('shifts_list', data=np.concatenate(shift_list, axis=1) if shift_list else np.array([]))
                 # Concatenate and save each data type
-                for data_type in ['histograms', 'shifts_list', 'magnet_settings']:
-                    data_list = merged_data[dataset_name][data_type]
-                    if data_list:
-                        # Concatenate along the first axis (assuming first dimension is the sample dimension)
-                        concatenated_data = np.concatenate(data_list, axis=0)
-                        group.create_dataset(data_type, data=concatenated_data)
                         
-                        if verbose:
-                            print(f"  {dataset_name}/{data_type}: {concatenated_data.shape}")
-    
+                if verbose:
+                    print(f"  {dataset_name}/histograms: {np.concatenate(hist_list, axis=1).shape}")
+                    print(f"  {dataset_name}/shifts_list: {np.concatenate(shift_list, axis=1).shape}")
+                    print(f"  {dataset_name}/magnet_settings: {magnet_settings.shape}")
+
     if verbose:
         print("Merge completed successfully!")
 
