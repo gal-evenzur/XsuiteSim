@@ -38,10 +38,10 @@ num_shifts_range = count_numeric_values(shifts_range)
 MagnetSettings = shifts['magnetSettings']
 n_particles = 1e5
 show_dead = True
-use_integration = True
+use_integration = False
 is_array = True
-dat_file = 'Data/secondary_particles.h5'
-histogram_dat = 'Data/histogram_data.h5'
+dat_file = 'secondary_particles.h5'
+histogram_dat = 'histogram_data.h5'
 
 
 # %% CONSTS________
@@ -96,7 +96,6 @@ fsigmaz = 150*u['um_to_m'] ## beam sigma
 MM      = 9.109e-31 ## kg, positron
 QQ      = +1  ## unit charge, positron
 mGeV    = (MM*u['c2'])/u['GeV_to_kgm2s2'] ## GeV
-E_GeV   = 10 # GeV, energy of primary partticles
 Emin    = 1e-2 ## GeV
 Emax    = 10 ## GeV
 smear_T  = False
@@ -111,5 +110,6 @@ max_dt  = 1e-9
 import bremss as br
 X0   = 35.3  if(shifts['magnetSettings']==502) else 8.897 # cm for Beryllium of Aluminum
 t_cm = 0.005 if(shifts['magnetSettings']==502) else 0.01 # cm (50 or 100 µm)
-E_vals, photons, eplus = br.build_pdfs(0.01,E_GeV,X0,t_cm)
+E_vals, photons, eplus = br.build_pdfs(Emin,Emax,X0,t_cm)
+
 

@@ -1,0 +1,34 @@
+Metadata-Version: 2.4
+Name: xdeps
+Version: 0.10.6
+Summary: Data dependency manager
+Home-page: https://xsuite.readthedocs.io/
+Download-URL: https://pypi.python.org/pypi/xdeps
+Author: Riccardo De Maria
+Author-email: riccardo.de.maria@cern.ch
+License: Apache 2.0
+Project-URL: Bug Tracker, https://github.com/xsuite/xsuite/issues
+Project-URL: Documentation, https://xsuite.readthedocs.io/
+Project-URL: Source Code, https://github.com/xsuite/xdeps
+License-File: LICENSE
+Requires-Dist: lark
+Requires-Dist: numpy
+Requires-Dist: scipy
+Requires-Dist: cython
+Provides-Extra: tests
+Requires-Dist: pytest; extra == "tests"
+Dynamic: author
+Dynamic: author-email
+Dynamic: description
+Dynamic: download-url
+Dynamic: home-page
+Dynamic: license
+Dynamic: license-file
+Dynamic: project-url
+Dynamic: provides-extra
+Dynamic: requires-dist
+Dynamic: summary
+
+Data dependency manager
+
+This package is part of the Xsuite collection.
