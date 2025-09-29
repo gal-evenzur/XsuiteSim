@@ -53,7 +53,7 @@ def get_hdf5_files(directory_path: str, recursive: bool = False, extensions: Lis
 def merge_hdf5_files(input_files: List[str], output_file: str, verbose: bool = True, 
                     memory_efficient: bool = False):
     """
-    Merge multiple HDF5 files with train/validation/test datasets into a single file.
+    Merge multiple HDF5 files with train/val/test datasets into a single file.
     
     Args:
         input_files: List of paths to input HDF5 files
@@ -71,7 +71,7 @@ def merge_hdf5_files(input_files: List[str], output_file: str, verbose: bool = T
     # Initialize containers for merged data
     merged_data = {
         'train': {'histograms': [], 'shifts_list': [], 'magnet_settings': []},
-        'validation': {'histograms': [], 'shifts_list': [], 'magnet_settings': []},
+        'val': {'histograms': [], 'shifts_list': [], 'magnet_settings': []},
         'test': {'histograms': [], 'shifts_list': [], 'magnet_settings': []}
     }
     
@@ -94,8 +94,8 @@ def merge_hdf5_files(input_files: List[str], output_file: str, verbose: bool = T
                     xedges = f['xedges'][:]
                     yedges = f['yedges'][:]
                 
-                # Process each dataset (train, validation, test)
-                for dataset_name in ['train', 'validation', 'test']:
+                # Process each dataset (train, val, test)
+                for dataset_name in ['train', 'val', 'test']:
                     if dataset_name in f:
                         dataset = f[dataset_name]
                         
@@ -124,7 +124,7 @@ def merge_hdf5_files(input_files: List[str], output_file: str, verbose: bool = T
         f.create_dataset('yedges', data=yedges)
         
         # Save merged datasets
-        for dataset_name in ['train', 'validation', 'test']:
+        for dataset_name in ['train', 'val', 'test']:
             if any(len(merged_data[dataset_name][key]) > 0 for key in merged_data[dataset_name]):
                 group = f.create_group(dataset_name)
                 
@@ -150,7 +150,7 @@ def _merge_hdf5_memory_efficient(input_files: List[str], output_file: str, verbo
     """Memory-efficient version that streams data directly without loading everything into RAM."""
     
     # First pass: get dimensions and edges
-    total_samples = {'train': 0, 'validation': 0, 'test': 0}
+    total_samples = {'train': 0, 'val': 0, 'test': 0}
     xedges = yedges = None
     sample_shapes = {}
     
@@ -163,7 +163,7 @@ def _merge_hdf5_memory_efficient(input_files: List[str], output_file: str, verbo
                 xedges = f['xedges'][:]
                 yedges = f['yedges'][:]
             
-            for dataset_name in ['train', 'validation', 'test']:
+            for dataset_name in ['train', 'val', 'test']:
                 if dataset_name in f and 'histograms' in f[dataset_name]:
                     shape = f[dataset_name]['histograms'].shape
                     total_samples[dataset_name] += shape[0]
@@ -177,7 +177,7 @@ def _merge_hdf5_memory_efficient(input_files: List[str], output_file: str, verbo
         
         # Pre-allocate datasets
         datasets = {}
-        for dataset_name in ['train', 'validation', 'test']:
+        for dataset_name in ['train', 'val', 'test']:
             if total_samples[dataset_name] > 0:
                 group = out_f.create_group(dataset_name)
                 datasets[dataset_name] = {}
@@ -189,7 +189,7 @@ def _merge_hdf5_memory_efficient(input_files: List[str], output_file: str, verbo
                 # We'll determine other shapes dynamically
         
         # Second pass: stream data directly to output
-        current_idx = {'train': 0, 'validation': 0, 'test': 0}
+        current_idx = {'train': 0, 'val': 0, 'test': 0}
         
         for i, file_path in enumerate(input_files):
             if verbose:
@@ -199,7 +199,7 @@ def _merge_hdf5_memory_efficient(input_files: List[str], output_file: str, verbo
                 continue
                 
             with h5py.File(file_path, 'r') as in_f:
-                for dataset_name in ['train', 'validation', 'test']:
+                for dataset_name in ['train', 'val', 'test']:
                     if dataset_name in in_f and dataset_name in datasets:
                         in_dataset = in_f[dataset_name]
                         out_dataset = datasets[dataset_name]

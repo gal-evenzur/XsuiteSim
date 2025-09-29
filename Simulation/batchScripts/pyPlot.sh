@@ -4,7 +4,7 @@
 ### ====================== ###
 
 #PBS -m n
-#PBS -l select=1:ncpus=1:mem=4gb -l walltime=00:30:00 -l io=1
+#PBS -l select=1:ncpus=1:mem=2gb -l walltime=00:30:00 -l io=1
 
 export IOTHROTTLE_VERBOSE=1
 
@@ -15,8 +15,8 @@ cd ${BASEPATH}
 source setup.sh
 ### Running the Job ###
 ### =============== ###
-# DATAPATH=${BASEPATH}/merged_data/merged_data.h5
-DATAPATH=${BASEPATH}/Data/h_${idx}.h5
+DATAPATH=${BASEPATH}/merged_data/merged_data.h5
+# DATAPATH=${BASEPATH}/Data/h_${idx}.h5
 
 cd Simulation/
 echo "Python initiate"
