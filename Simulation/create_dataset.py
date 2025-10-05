@@ -16,8 +16,7 @@ print("saved file will be:", datafile_path)
 
 
 plt.rcParams['image.cmap'] = 'afmhot'
-np.random.seed(idx)
-
+rng = np.random.default_rng(seed=idx)
 # Define the magnet settings to test
 name = 'q0'
 setting = 'x'  
@@ -26,15 +25,16 @@ change_beam = True
 shift_list = shifts_array_random(shifts, shifts_range, 5, magnet_settings=magnet_settings, is_array=is_array)
 
 n = {
-    'train': 1,
-    'val': 0,
-    'test': 0
+    'train': 5,
+    'val': 1,
+    'test': 1
 }
 
 
 # | TRAIN | 
 shift_train, histogram_train, xedges, yedges = rand_from_scratch_histogram(shifts_template=shifts, shifts_range=shifts_range,
                                                         particles_file=dat_file,
+                                                        rng=rng,
                                                         n_batch=n['train'], magnet_settings=magnet_settings,
                                                         verbose=True,
                                                         change_beam=change_beam, normalize=False, std=False, minmax=True)
@@ -45,6 +45,7 @@ print("Histogram train shape:", histogram_train.shape)
 if n['val'] > 0:
     shift_val, histogram_val, _, _ = rand_from_scratch_histogram(shifts_template=shifts, shifts_range=shifts_range,
                                                             particles_file=dat_file,
+                                                            rng=rng,
                                                             n_batch=n['val'], magnet_settings=magnet_settings,
                                                             verbose=True,
                                                             change_beam=change_beam, normalize=False, std=False, minmax=True)
@@ -63,7 +64,7 @@ if n['test'] > 0:
     # For testing purposes, use deterministic shifts
     shift_test = shifts_array_deterministic(shifts, 'q0', 'x', [0, 1e-3], magnet_settings=magnet_settings)
     shift_test = shift_list_to_matrix(shift_test, n=num_shifts)
-    histogram_test, xedges, yedges = shifts_to_histogram(shift_test, change_beam=True)
+    histogram_test, xedges, yedges = shifts_to_histogram(shift_test, change_beam=True, rng=rng)
     print("Histogram test shape:", histogram_test.shape)
 else:
     shift_test = np.zeros((len(magnet_settings), 1, num_shifts))

@@ -12,13 +12,13 @@ shifts = {
 }
 
 shifts_range = {
-    'q0': {'x': (-3e-3, 5e-3), 'y': (-3e-3, 3e-3), 'ang_x': (-0.5,0.5), 'ang_y': (-1.5,1.5), 'ang_z': (-3,3)}, # in m, shift in x and y, ang in deg
-    'q1': {'x': (-5e-3, 5e-3), 'y': (-5e-3, 5e-3), 'ang_x': (-1.5,1.5), 'ang_y': (-1.5,1.5), 'ang_z': (-3,3)},
-    'q2': {'x': (-5e-3, 5e-3), 'y': (-5e-3, 5e-3), 'ang_x': (-1.5,1.5), 'ang_y': (-1.5,1.5), 'ang_z': (-3,3)},
-    'beam': {'fx0': (-1.5e-3,1.5e-3), 'fy0': (-3e-3, 3e-3), 'fz0': -2, 'fbeamfocus': (-1e-3, 1e-3)},
+    'q0': {'x': (-9e-4, 5e-3), 'y': (-2e-4, 2.7e-3), 'ang_x': (-0.44,0.49), 'ang_y': (-0.8,0.8), 'ang_z': (-1.9,1.9)}, # in m, shift in x and y, ang in deg
+    'q1': {'x': (-1.2e-3, 3e-3), 'y': (-2.7e-3, 2.9e-3), 'ang_x': (-0.75,0.75), 'ang_y': (-1.5,1.25), 'ang_z': (-2,1.4)},
+    'q2': {'x': (-2.6e-3, 1e-3), 'y': (-3.8e-3, 2e-3), 'ang_x': (-1.4,1.4), 'ang_y': (-1.1,0.8), 'ang_z': (-3,2)},
+    'beam': {'fx0': (-1e-3,1.3e-3), 'fy0': (-1.7e-3, -2.6e-4), 'fz0': -2, 'fbeamfocus': 0},
     'dd_corr': {'x': 0.0, 'y': 0.0, 'ang_x': 0, 'ang_y': 0, 'ang_z': 0},
     'dd': {'x': 0.0, 'y': 0.0, 'ang_x': 0, 'ang_y': 0, 'ang_z': 0},
-}
+}   
 
 # Calculate the number of integers in shifts
 def count_numeric_values(data):

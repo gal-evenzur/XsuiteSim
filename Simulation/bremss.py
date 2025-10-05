@@ -1,4 +1,5 @@
 import numpy as np
+from numpy.random import default_rng
 from scipy.integrate import quad
 import time
 import matplotlib.pyplot as plt
@@ -43,7 +44,7 @@ def build_pdfs(Emin,Emax, X0=8.897, t_cm=0.01, npts=400):
     return E_vals, photon_vals, eplus_vals
 
 # --- Correct sampling on bins ---
-def sample_from_pdf_on_bins(E_vals, pdf_vals, nsamples=10000, sample_log_within_bin=False, Emin=0.1, Emax=10):
+def sample_from_pdf_on_bins(E_vals, pdf_vals, rng=default_rng(), nsamples=10000, sample_log_within_bin=False, Emin=0.1, Emax=10):
 
     # construct edges
     edges = np.zeros(len(E_vals) + 1)
@@ -57,11 +58,11 @@ def sample_from_pdf_on_bins(E_vals, pdf_vals, nsamples=10000, sample_log_within_
     p_bin /= p_bin.sum()
 
     cdf = np.cumsum(p_bin)
-    rnd = np.random.random(nsamples)
+    rnd = rng.random(nsamples)
     bin_indices = np.searchsorted(cdf, rnd, side='right')
     bin_indices = np.clip(bin_indices, 0, len(E_vals)-1)
 
-    u = np.random.random(nsamples)
+    u = rng.random(nsamples)
     samples = np.zeros(nsamples)
     for i, b in enumerate(bin_indices):
         lo, hi = edges[b], edges[b+1]

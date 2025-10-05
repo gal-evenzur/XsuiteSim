@@ -5,11 +5,12 @@ import time
 
 def rand_from_scratch_histogram(shifts_template, shifts_range, n_batch, ref=ref, magnet_settings=[490], particles_file=None,
                                 change_beam=False, normalize=False, std=False, minmax=True,
+                                rng=default_rng(),
                                 max_attempts=10,
                                 verbose=False, monitor_bins=monitor_bins):
     
     if particles_file is None or change_beam:
-        states = generate_secondary_particles(shifts_template, n_particles, verbose=verbose)
+        states = generate_secondary_particles(shifts_template, n_particles, verbose=verbose, rng=rng)
         particles = particles_from_states(states, ref, verbose=verbose)
     else:
         particles = import_particles_from_hdf5(particles_file, ref, verbose=verbose)
@@ -32,14 +33,16 @@ def rand_from_scratch_histogram(shifts_template, shifts_range, n_batch, ref=ref,
             if attempt > 1:
                 if verbose: print(f"  Attempt {attempt} for batch {i+1}/{n_batch}")
             # Create a random shift configuration (n_magnet_settings, 1)
-            shifts = shifts_array_random(shifts_template, shifts_range, 1, magnet_settings=magnet_settings, is_array=False)
+            shifts = shifts_array_random(shifts_template, shifts_range, 1,
+             rng=rng,
+             magnet_settings=magnet_settings, is_array=False)
             for magnet_idx in range(n_magnet_settings):
 
                 shift = shifts[magnet_idx][0]  # Extract the single configuration
                 # Create a beam and caculate histogram
                 line, env, ref = line_init(shifts=shift)
                 if change_beam:
-                    states = generate_secondary_particles(shift, n_particles, verbose=False)
+                    states = generate_secondary_particles(shift, n_particles, verbose=False, rng=rng)
                     particles = particles_from_states(states, ref, verbose=verbose)
                 h, xedges, yedges = track_monitor(line, particles)
                 valid = is_valid(h)
@@ -66,12 +69,13 @@ def rand_from_scratch_histogram(shifts_template, shifts_range, n_batch, ref=ref,
 
 # Save multiple histograms for a shift list
 def shifts_to_histogram(shift_list, ref=ref, filename=None, change_beam=False,
+                        rng=default_rng(),
                         normalize=False, std=False, minmax=True,
                         max_attempts=10,
                         verbose=False, monitor_bins=monitor_bins):
     
     if filename is None or change_beam:
-        states = generate_secondary_particles(shifts, n_particles, verbose=False)
+        states = generate_secondary_particles(shifts, n_particles, verbose=False, rng=rng)
         particles = particles_from_states(states, ref, verbose=verbose)
 
     else:
@@ -95,7 +99,9 @@ def shifts_to_histogram(shift_list, ref=ref, filename=None, change_beam=False,
                 attempt += 1
                 if attempt > 1:
                     if verbose: print(f"  Attempt {attempt} for shift {i+1}/{len(shift_list[magnet_idx])}")
-                    new_shifts = shifts_array_random(shifts, shifts_range, 1, magnet_settings=[shift['magnetSettings']], is_array=False)
+                    new_shifts = shifts_array_random(shifts, shifts_range, 1, 
+                        rng=rng, 
+                        magnet_settings=[shift['magnetSettings']], is_array=False)
                     shift = new_shifts[0][0]
                     s_array_form = shifts_to_array(shift, n=num_shifts)
                     shift_list[magnet_idx][i] = s_array_form
@@ -103,7 +109,7 @@ def shifts_to_histogram(shift_list, ref=ref, filename=None, change_beam=False,
                 # Create a beam and caculate histogram
                 line, env, ref = line_init(shifts=shift)
                 if change_beam:
-                    states = generate_secondary_particles(shift, n_particles, verbose=False)
+                    states = generate_secondary_particles(shift, n_particles, verbose=False, rng=rng)
                     particles = particles_from_states(states, ref, verbose=verbose)
                 h, xedges, yedges = track_monitor(line, particles)
                 valid = is_valid(h)
@@ -207,7 +213,7 @@ def array_to_shifts(s_arr, shifts_template):
     req_array_to_shifts(s_arr, shifts, 0)
     return shifts
 
-def shifts_array_random(shifts_template, shifts_range, n_samples, magnet_settings=[490], is_array = False):
+def shifts_array_random(shifts_template, shifts_range, n_samples, rng=default_rng(), magnet_settings=[490], is_array = False):
     """ 
     Create a matrix of random shift configurations.
     Each row corresponds to a different magnet setting.
@@ -225,25 +231,22 @@ def shifts_array_random(shifts_template, shifts_range, n_samples, magnet_setting
                       defined in shifts_range
     """
     # Generate random number for seeding
-    seed = np.random.randint(0, 100000)
     if is_array:
         shift_matrix = np.zeros((len(magnet_settings), n_samples, num_shifts), dtype=np.float32)
         range_array = ranges_to_array(shifts_range, n=num_shifts_range)
         for m_idx, mag_setting in enumerate(magnet_settings):
-            np.random.seed(seed)
             shift_matrix[m_idx, :, 0] = mag_setting  # First column is magnet setting
             for s_idx, lowhigh in enumerate(range_array):
                 # s_idx points to the setting in range_array, like s_idx=1 --> 'q0' 'x'
                 # go through each setting and generate n_samples random values within the specified range
                 low, high = lowhigh
                 if low != high:
-                    shift_matrix[m_idx, :, s_idx + 1] = np.random.uniform(low, high, size=n_samples)
+                    shift_matrix[m_idx, :, s_idx + 1] = rng.uniform(low, high, size=n_samples)
                 else:
                     shift_matrix[m_idx, :, s_idx + 1] = low  # If range is zero, just use the fixed value
     else:
         shift_matrix = []
         for mag_setting in magnet_settings:
-            np.random.seed(seed)
             row = [] # Each row corresponds to a magnet setting
             shifts_copy = deepcopy(shifts_template)
             shifts_copy['magnetSettings'] = mag_setting
@@ -260,7 +263,7 @@ def shifts_array_random(shifts_template, shifts_range, n_samples, magnet_setting
                         if type(rand_range) != tuple or len(rand_range) != 2:
                             continue  # Skip if range is not defined properly
                         # Sample a random value within the specified range
-                        random_val = np.random.uniform(*rand_range)
+                        random_val = rng.uniform(*rand_range)
                         shifts_sample[element][position] = random_val
                 row.append(deepcopy(shifts_sample))
             shift_matrix.append(row)
@@ -325,7 +328,9 @@ def normalize_batch_hists(hist_arr, std=False, minmax=True):
 
 
 # Plotting functions:--
-def plot_shift_array(shift_list, magnet_settings, normalize=False, n_max=5, name='q0', setting='x', verbose=False):
+def plot_shift_array(shift_list, magnet_settings, 
+                    rng=default_rng(),
+                    normalize=False, n_max=5, name='q0', setting='x', verbose=False):
     '''
     Assumes that shift_list is in array form!!
     '''

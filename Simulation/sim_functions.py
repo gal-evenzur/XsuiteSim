@@ -1,5 +1,6 @@
 from matplotlib.ticker import AutoMinorLocator
 import numpy as np
+from numpy.random import default_rng
 import matplotlib.pyplot as plt
 from matplotlib.colors import LogNorm
 import h5py
@@ -89,14 +90,14 @@ def B_T_to_k(B_T, p_mks, q_mks):
 
 # %% * * * * * P A R T I C L E S * * * * 
 
-def generate_secondary_particles(shifts, n_particles, verbose=True):
+def generate_secondary_particles(shifts, n_particles, verbose=True, rng=default_rng()):
     states = []
     for i in range(int(n_particles)):
         ### particle species
         QQ = +1  ## unit charge, positron
         mass_GeV = (MM*u['c2'])/u['GeV_to_kgm2s2'] ## GeV
         E_GeV = 10 # GeV
-        state = GenerateGaussianBeam(E_GeV,mass_GeV,QQ, shifts)
+        state = GenerateGaussianBeam(E_GeV,mass_GeV,QQ, shifts, rng=rng)
         states.append(state)
     if verbose: print("Finised creating beam")
     zAL     = +30 ### the aluminum foil, cm
@@ -111,7 +112,7 @@ def generate_secondary_particles(shifts, n_particles, verbose=True):
     for i, state in enumerate(states):
         primary_state_at_foil = propagate_state_in_vacuum_to_z(state,Z0_m)
         primary_states_at_foil.append(primary_state_at_foil)
-        secondary_state_at_foil = simulate_secondary_production(primary_state_at_foil,q=+1,Emin=Emin,Emax=Emax,smear_T=smear_T,smear_pT=smear_pT)
+        secondary_state_at_foil = simulate_secondary_production(primary_state_at_foil,rng=rng, q=+1,Emin=Emin,Emax=Emax,smear_T=smear_T,smear_pT=smear_pT)
         secondary_states_at_foil.append(secondary_state_at_foil)
         if verbose and i%10000 == 0:
             print(f"created {i} particles")
@@ -223,7 +224,7 @@ def particles_from_states(states, ref, verbose=False):
         
     return particles
 
-def GenerateGaussianBeam(E_GeV,mass_GeV,charge,shifts, mks=False):
+def GenerateGaussianBeam(E_GeV,mass_GeV,charge,shifts, mks=False, rng=default_rng()):
     fx0     = shifts['beam']['fx0']
     fy0     = shifts['beam']['fy0']
     fz0     = shifts['beam']['fz0']
@@ -235,20 +236,20 @@ def GenerateGaussianBeam(E_GeV,mass_GeV,charge,shifts, mks=False):
     fbetax      = (fsigmax**2)/femittancex
     fbetay      = (fsigmay**2)/femittancey
     ### z
-    z0     = np.random.normal(fz0,fsigmaz)
+    z0     = rng.normal(fz0,fsigmaz)
     zdrift = z0 - fbeamfocus ### correct drift distance for x, y distribution. Forces the beam to pass through the IP (i.e. focuesd at z=0)
     ### x
     sigmax  = fsigmax * np.sqrt(1.0 + (zdrift/fbetax)**2)
-    x0      = np.random.normal(fx0, sigmax)
+    x0      = rng.normal(fx0, sigmax)
     meandx  = x0*zdrift / (zdrift**2 + fbetax**2)
     sigmadx = np.sqrt( femittancex*fbetax / (zdrift**2 + fbetax**2) )
-    dx0     = np.random.normal(meandx, sigmadx)
+    dx0     = rng.normal(meandx, sigmadx)
     ### y
     sigmay  = fsigmay * np.sqrt(1.0 + (zdrift/fbetay)**2)
-    y0      = np.random.normal(fy0, sigmay)
+    y0      = rng.normal(fy0, sigmay)
     meandy  = y0*zdrift / (zdrift**2 + fbetay**2)
     sigmady = np.sqrt( femittancey*fbetay / (zdrift**2 + fbetay**2) )
-    dy0     = np.random.normal(meandy, sigmady)
+    dy0     = rng.normal(meandy, sigmady)
     ### p
     pz = np.sqrt( (E_GeV**2 - mass_GeV**2)/ (dx0**2 + dy0**2 + 1.0) )
     px = dx0*pz
@@ -283,14 +284,14 @@ def propagate_state_in_vacuum_to_z(state, z):
     return state_at_z
 
 
-def truncated_exp_NK(a,b,how_many):
+def truncated_exp_NK(a,b,how_many, rng=default_rng()):
     a = -np.log(a)
     b = -np.log(b)
-    rands = np.exp(-(np.random.rand(how_many)*(b-a) + a))
+    rands = np.exp(-(rng.random(how_many)*(b-a) + a))
     return rands[0] if(how_many==1) else rands
 
 
-def simulate_secondary_production(primary_state,q=+1,Emin=0.5,Emax=5,smear_T=False,smear_pT=False):    
+def simulate_secondary_production(primary_state, rng=default_rng(), q=+1,Emin=0.5,Emax=5,smear_T=False,smear_pT=False):    
     x      = primary_state[0]
     y      = primary_state[1]
     z      = primary_state[2]
@@ -300,18 +301,18 @@ def simulate_secondary_production(primary_state,q=+1,Emin=0.5,Emax=5,smear_T=Fal
     mass   = primary_state[6]
     ### smear trasverse position
     if(smear_T):
-        x = x + np.random.normal(0,smear_sigma_T_um*u['um_to_m'])
-        y = y + np.random.normal(0,smear_sigma_T_um*u['um_to_m'])
+        x = x + rng.normal(0,smear_sigma_T_um*u['um_to_m'])
+        y = y + rng.normal(0,smear_sigma_T_um*u['um_to_m'])
     ### smear trasverse momenta
     if(smear_pT):
-        px = px + np.random.normal(0,smear_sigma_P_GeV) 
-        py = py + np.random.normal(0,smear_sigma_P_GeV)
+        px = px + rng.normal(0,smear_sigma_P_GeV) 
+        py = py + rng.normal(0,smear_sigma_P_GeV)
     
     ### sample energy like in bremss
 
     # E = truncated_exp_NK(Emin,Emax, 1) if(Emax>Emin) else Emin # GeV
-    E = br.sample_from_pdf_on_bins(E_vals, eplus, nsamples=1)
-    while(E[0]<Emin or E[0]>Emax): E = br.sample_from_pdf_on_bins(E_vals, eplus, nsamples=1)
+    E = br.sample_from_pdf_on_bins(E_vals, eplus, nsamples=1, rng=rng)
+    while(E[0]<Emin or E[0]>Emax): E = br.sample_from_pdf_on_bins(E_vals, eplus, nsamples=1, rng=rng)
     E = E[0]
 
 
