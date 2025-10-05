@@ -48,10 +48,10 @@ hyperVar = {
     'amsgrad': False, 
 
     # Training procedure parameters
-    'freeze_backbone_epochs': 2,    # set to 0 to disable; no reinit needed since lr=0 during freeze
+    'freeze_backbone_epochs': 0,    # set to 0 to disable; no reinit needed since lr=0 during freeze
     'n_epochs': 100,
     'patience': 6,
-    'score_metric': 'r2_score',
+    'score_metric': 'val_loss',  # 'val_loss' or 'r2_score'
     'lr_factor': 0.5,
     'lr_patience': 2, # number of no improvement rounds before lowering lr
     'min_lr': 1e-6,
@@ -62,9 +62,6 @@ hyperVar = {
     'unscaled_plot': True,
     'plot_diff': 0.5 #pT difference
 }
-
-hyperVar['no_middle'] = True if hyperVar['n_outputs'] == 2 else False 
-
 # %% &&&&&& IMPORTING DATA &&&&&&
 start_time = time.time()
 same_scale = hyperVar['same_scale']  # If True, all signals are scaled to the same range
@@ -111,7 +108,7 @@ class EfficientNet(nn.Module):
         # --- Adapt for 1-channel (grayscale) input ---
         original_conv = self.net.features[0][0]  # First conv layer in EfficientNet
         self.net.features[0][0] = nn.Conv2d(
-            in_channels=1,
+            in_channels=4,
             out_channels=original_conv.out_channels,
             kernel_size=original_conv.kernel_size,
             stride=original_conv.stride,
@@ -119,9 +116,11 @@ class EfficientNet(nn.Module):
             bias=False
         )
         if pretrained:
-            with torch.no_grad():
+            with torch.no_grad(): #assign channels
                 w = original_conv.weight.data
-                self.net.features[0][0].weight.copy_(w.mean(dim=1, keepdim=True))
+                # Initialize each of the 4 channels with the same averaged weights
+                averaged_weights = w.mean(dim=1, keepdim=True)
+                self.net.features[0][0].weight.data = averaged_weights.repeat(1, 4, 1, 1)
 
         # --- Adapt the final layer for regression ---
         num_ftrs = self.net.classifier[1].in_features
