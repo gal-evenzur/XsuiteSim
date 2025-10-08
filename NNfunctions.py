@@ -60,13 +60,15 @@ class SignalDataset(Dataset):
             self.histograms = torch.from_numpy(histograms)
 
         self.X = transfrom(self.histograms, std=False, minmax=True)
-        self.Y = self.shift_array[:, :, 1:]  # Only keep the parameters (exclude magnet settings)
+        # shape(X) = n_magnet_settings [=n_channels] x n_samples x 128 x 256  
+        self.Y = self.shift_array[0, :, 1:]  # Only keep the parameters (exclude magnet settings)
+        # shape(Y) = (num_samples, num_shifts) = (num_samples, 29)
 
     def __len__(self):
         return len(self.X)
 
-    def __getitem__(self, idx):
-        return self.X[idx], self.Y[idx]
+    def __getitem__(self, idx): #returns the 4 channels and the corresponding shifts
+        return self.X[:, idx], self.Y[idx]
 
     def get_magnet_settings(self):
         return self.magnet_settings

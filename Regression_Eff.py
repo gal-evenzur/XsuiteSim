@@ -33,15 +33,15 @@ hyperVar = {
 
     # Model parameters
     'same_scale': True,
-    'n_outputs': 2,
-    'Bnumber': 1,  # 0 for B0, 1 for B1, 2 for B2
+    'n_outputs': 29,
+    'Bnumber': 0,  # 0 for B0, 1 for B1, 2 for B2
 
 
     # Optimiser parameters
     'optimizer': AdamW,
     'h_lr': 5e-4,
     'b_lr': 1e-4,
-    'weight_decay': 1e-5,
+    'weight_decay': 0,
     'wd_off_below_lr': 5e-6,
     'beta1': 0.9, # ++ smoother training but slower response to changes
     'beta2': 0.999, # -- faster adaptation of learning rates but potentially less stability
@@ -51,7 +51,7 @@ hyperVar = {
     'freeze_backbone_epochs': 0,    # set to 0 to disable; no reinit needed since lr=0 during freeze
     'n_epochs': 100,
     'patience': 6,
-    'score_metric': 'val_loss',  # 'val_loss' or 'r2_score'
+    'score_metric': 'val_loss',  # 'val_loss'
     'lr_factor': 0.5,
     'lr_patience': 2, # number of no improvement rounds before lowering lr
     'min_lr': 1e-6,
@@ -64,12 +64,15 @@ hyperVar = {
 }
 # %% &&&&&& IMPORTING DATA &&&&&&
 start_time = time.time()
-same_scale = hyperVar['same_scale']  # If True, all signals are scaled to the same range
-no_middle = hyperVar['no_middle']  # If True, regress only the left and right peaks
-
-trainSet = SignalDataset('Data/data_stft.h5', split="train", resnet=True, same_scale=same_scale, no_middle=no_middle)
-validateSet = SignalDataset('Data/data_stft.h5', split="validate", resnet=True, same_scale=same_scale, no_middle=no_middle)
-testSet = SignalDataset('Data/data_stft.h5', split="test", resnet=True, same_scale=same_scale, no_middle=no_middle)
+data_path = 'merged_data/merged_data.h5'
+trainSet = SignalDataset(data_path, split="train")
+try:
+    validateSet = SignalDataset(data_path, split="validate")
+    testSet = SignalDataset(data_path, split="test")
+except:
+    print("No separate validation/test sets found, using train set for all.")
+    validateSet = SignalDataset(data_path, split="train")
+    testSet = SignalDataset(data_path, split="train")
 
 dataloader = DataLoader(trainSet, batch_size=hyperVar["batch_size"], shuffle=True)
 validate_loader = DataLoader(validateSet, batch_size=hyperVar["batch_size"], shuffle=False)
@@ -82,7 +85,7 @@ print(f"Dataset sizes: Train={len(trainSet)}, Validation={len(validateSet)}, Tes
 
 # %% Structure for the NN: #
 class EfficientNet(nn.Module):
-    def __init__(self, n_classes=3, pretrained=True, freeze_pretrained=False):
+    def __init__(self, n_classes=29, pretrained=True, freeze_pretrained=False):
         """
         Initializes a EfficientNet model adapted for single-channel input.
         Args:
@@ -113,7 +116,7 @@ class EfficientNet(nn.Module):
             kernel_size=original_conv.kernel_size,
             stride=original_conv.stride,
             padding=original_conv.padding,
-            bias=False
+            bias=True
         )
         if pretrained:
             with torch.no_grad(): #assign channels
@@ -178,7 +181,7 @@ def build_param_groups(model, lr_head, lr_body, weight_decay):
 def set_bn_eval(m: nn.Module):
     # Put all BatchNorm variants in eval mode to freeze running_mean/var updates
     if isinstance(m, nn.modules.batchnorm._BatchNorm):
-        # m.eval()
+        m.eval()
         pass
 
 # %% DELETING OLD PARAMETERS !!! 
@@ -235,32 +238,13 @@ def supervised_evaluator(model, device="cpu"):
             X_batch, Y_batch = batch
             X, Y = X_batch.to(device), Y_batch.to(device)
             Y_pred = model(X)
-            
-            # Filter out abnormally large predictions
-            # Create a mask for valid predictions (not abnormally large)
-            # Calculate magnitude of predictions
-            pred_magnitude = torch.norm(Y_pred, dim=1)
-            
-            # Define threshold for abnormal predictions (adjust as needed)
-            # Using mean + 3*std as a statistical outlier threshold
-            threshold = pred_magnitude.mean() + 3 * pred_magnitude.std()
-            
-            # Create mask for normal predictions
-            valid_mask = pred_magnitude < threshold
-            # Apply mask to predictions and ground truth
-            # Filter predictions and ground truth
-            if not torch.all(valid_mask):
-                print(f"Filtered out {(~valid_mask).sum().item()} abnormal predictions")
-                Y_pred = Y_pred[valid_mask]
-                Y = Y[valid_mask]
-
+            # Removed masking unvalid predictions
             return Y_pred, Y
 
     engine = Engine(_interference)
 
     # Attach loss metric
     Loss(criterion,
-        output_transform=lambda x: (x[0], x[1])
     ).attach(engine, 'loss')
 
     return engine
@@ -269,7 +253,7 @@ trainer = supervised_train(model, device=device)
 evaluator = supervised_evaluator(model, device=device)
 
 def score(engine):
-    return score_function(engine, metric_name=hyperVar['score_metric'])
+    return -engine.state.metrics['loss']
 
 handler = EarlyStopping(
     patience=hyperVar['patience'],  # Number of epochs to wait for improvement
@@ -299,7 +283,8 @@ def maybe_disable_wd(opt, threshold):
 
 # Setup Model Checkpoint handler to save the best model
 import os
-checkpoint_dir = "./checkpoints"
+pydir = os.path.dirname(os.path.abspath(__file__)) # This results "fresh-start/"
+checkpoint_dir = f"{pydir}/checkpoints"
 os.makedirs(checkpoint_dir, exist_ok=True)
 
 checkpoint_handler = ModelCheckpoint(
@@ -326,18 +311,6 @@ best_model_info = {
     }
 }
 
-X_params, Y_params = validateSet.unscale()
-
-def apply_unscaling(output):
-    y_pred_scaled = unscale_tensor(output[0], Y_params)
-    y_true_scaled = unscale_tensor(output[1], Y_params)
-    return y_pred_scaled, y_true_scaled
-transform_func = lambda x: apply_unscaling(x)
-
-r2(
-    output_transform=transform_func,
-    device=device
-).attach(evaluator, 'r2_score')
 
 # ---- Backbone freeze just for the first epoch (no optimizer rebuild) ----
 @trainer.on(Events.EPOCH_STARTED)
@@ -374,7 +347,6 @@ def run_validation_loss_track(engine):
     evaluator.run(validate_loader)
     val_loss = evaluator.state.metrics['loss']
     val_losses.append(val_loss)
-    r2 = evaluator.state.metrics['r2_score']
     
     scheduler.step(val_loss)  # Step the scheduler based on validation loss
     maybe_disable_wd(optimizer, hyperVar['wd_off_below_lr'])
@@ -397,7 +369,6 @@ def run_validation_loss_track(engine):
     
     print(f"Epoch {trainer.state.epoch} - Training Loss: {trainer.state.output:.4f}, "
             f"Validation Loss: {val_loss:.4f}, Best Epoch: {best_model_info['epoch']}")
-    print("R2 Score:", r2)
     print("Current LRs:", [f"{a:.2e}" for a in lr[-1]])
 
 
@@ -443,70 +414,15 @@ trainer.run(dataloader, max_epochs=hyperVar['n_epochs'])
 
 # Restore the best model
 if best_model_info['params'] is not None:
-    print(f"Restoring best model from epoch {best_model_info['epoch']} with R2: {best_model_info['score']:.4f}")
+    print(f"Restoring best model from epoch {best_model_info['epoch']} with score: {best_model_info['score']:.4f}")
     model.load_state_dict(best_model_info['params'])
 else:
     print("Warning: No best model was found during training!")
-
-# Restore the best model
-if best_model_info['params'] is not None:
-    print(f"Restoring best model from epoch {best_model_info['epoch']} with validation loss: {-best_model_info['score']:.4f}")
-    model.load_state_dict(best_model_info['params'])
-else:
-    print("Warning: No best model was found during training!")
-
 
  # %%   ------Evaluation of the model------
 set = testSet
-f = set.get_freqs()
-
-X_params, Y_params = set.unscale()
-
-def apply_unscaling(output):
-    y_pred_scaled = unscale_tensor(output[0], Y_params)
-    y_true_scaled = unscale_tensor(output[1], Y_params)
-    return y_pred_scaled, y_true_scaled
-transform_func = lambda x: apply_unscaling(x)
-
-MeanRelativeError(
-    output_transform=transform_func, device=device
-).attach(evaluator, 'rel_error_3')
-
-PeakComparison(
-    output_transform=transform_func, device=device
-).attach(evaluator, 'peak_comparison')
-
 
 print("Python <<<<< legit everything else (except C)\n")
 state = evaluator.run(test_loader)
-rel_errors = state.metrics["rel_error_3"]
-# Print the relative error for each output
-for i, rel_error in enumerate(rel_errors):
-    print(f"Relative Error for output {i+1}: {rel_error:.4e}")
-print("R2 Score for output :", state.metrics['r2_score'])
-
-# Naive model
-# Create the naive solution model
-naive_model = NaiveSolutionWrapper(no_middle=hyperVar['no_middle'])
-naive_model.to(device)
-
-# Create a separate evaluator for the naive solution
-naive_evaluator = supervised_evaluator(naive_model, device=device)
-
-# Attach the same metrics as used for the regular model
-MeanRelativeError(
-    output_transform=transform_func, device=device
-).attach(naive_evaluator, 'rel_error_3')
-
-PeakComparison(
-    output_transform=transform_func, device=device
-).attach(naive_evaluator, 'peak_comparison')
-
-# Run evaluation on the test set
-print("Evaluating naive solution...")
-naive_state = naive_evaluator.run(test_loader)
-
-# Print results
-rel_errors = naive_state.metrics["rel_error_3"]
-for i, rel_error in enumerate(rel_errors):
-    print(f"Relative Error for output {i+1}: {rel_error:.4e}")
+test_loss = state.metrics['loss']
+print(f"Test Loss: {test_loss:.4f}")
