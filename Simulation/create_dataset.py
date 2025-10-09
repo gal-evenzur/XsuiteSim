@@ -20,14 +20,14 @@ rng = np.random.default_rng(seed=idx)
 # Define the magnet settings to test
 name = 'q0'
 setting = 'x'  
-magnet_settings = [490, 490.1]
+magnet_settings = [490, 490.1, 490.2]
 change_beam = True
 shift_list = shifts_array_random(shifts, shifts_range, 5, magnet_settings=magnet_settings, is_array=is_array)
 
 n = {
-    'train': 5,
-    'val': 1,
-    'test': 1
+    'train': 1,
+    'val': 0,
+    'test': 0
 }
 
 

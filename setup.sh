@@ -37,4 +37,21 @@ for pkg in "${REQUIRED_PKGS[@]}"; do
     fi
 done
 
+# 5. Check and install pytorch
+if python -c "import torch" &> /dev/null; then
+    echo "Package 'torch' already installed."
+else
+    echo "Installing package 'pytorch'..."
+    pip install pytorch
+fi
+
+
+# 6. Check and install pytorch-ignite
+if pip show pytorch-ignite &> /dev/null; then
+    echo "Package 'pytorch-ignite' already installed."
+else
+    echo "Installing package 'pytorch-ignite'..."
+    pip install pytorch-ignite
+fi
+
 echo "Setup complete. Virtual environment is active."

@@ -15,7 +15,7 @@ cd ${BASEPATH}
 cd Simulation/batchScripts
 ### User Input ###
 ### ========== ###
-for i in {0..500}
+for i in {0..1500}
 do
     echo "Submitting job ${i}..."
     qsub -q N -v BASEPATH="${BASEPATH}",idx="${i}" -o ${LOGDIR} -e ${LOGDIR} pyRun.sh
