@@ -270,10 +270,10 @@ input_files = get_hdf5_files(input_directory)
 output_file = os.path.join(maindir, "merged_data", "merged_data.h5")
 
 # Optional: Check structure of input files before merging
-print("Input file structures:")
-for file_path in input_files:
-    if os.path.exists(file_path):
-        get_dataset_info(file_path)
+# print("Input file structures:")
+# for file_path in input_files:
+#     if os.path.exists(file_path):
+#         get_dataset_info(file_path)
 
 # Merge the files
 merge_hdf5_files(input_files, output_file, verbose=True)

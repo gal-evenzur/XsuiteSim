@@ -50,7 +50,7 @@ for param, vals in shifts.items():
 
     for i, (setting, val) in enumerate(vals.items()):
         param_values = all_shifts[:, p_idx]
-        axes[i].hist(param_values, bins=300, alpha=0.7)
+        axes[i].hist(param_values, bins=50, alpha=0.7)
         axes[i].set_title(f'{param} {setting}')
         axes[i].set_xlabel('Value')
         axes[i].set_ylabel('Density')
@@ -104,30 +104,30 @@ for param, vals in shifts.items():
     print(f"{param} histograms plot saved to {param_hist_path}")
 
 
-    # Calculate total sum for each histogram
-    # histograms shape: (n_magnet_settings, n_samples, height, width)
-    total_sums = np.sum(histograms, axis=(2, 3))  # Sum over height and width dimensions
+# Calculate total sum for each histogram
+# histograms shape: (n_magnet_settings, n_samples, height, width)
+total_sums = np.sum(histograms, axis=(2, 3))  # Sum over height and width dimensions
 
-    # Create histogram plots for each magnet setting
-    n_magnet_settings = total_sums.shape[0]
-    fig, axes = plt.subplots(1, n_magnet_settings, figsize=(4 * n_magnet_settings, 4))
+# Create histogram plots for each magnet setting
+n_magnet_settings = total_sums.shape[0]
+fig, axes = plt.subplots(1, n_magnet_settings, figsize=(4 * n_magnet_settings, 4))
 
-    # Handle case where there's only one magnet setting
-    if n_magnet_settings == 1:
-        axes = [axes]
+# Handle case where there's only one magnet setting
+if n_magnet_settings == 1:
+    axes = [axes]
 
-    for i in range(n_magnet_settings):
-        setting_sums = total_sums[i]  # Array of total sums for this magnet setting
-        
-        axes[i].hist(setting_sums, bins=200, alpha=0.7)
-        axes[i].set_title(f'Magnet Setting {i}')
-        axes[i].set_xlabel('Total Sum')
-        axes[i].set_ylabel('Count')
-        axes[i].grid(True, alpha=0.3)
-        axes[i].ticklabel_format(style='scientific', axis='x', scilimits=(0,0))
+for i in range(n_magnet_settings):
+    setting_sums = total_sums[i]  # Array of total sums for this magnet setting
+    
+    axes[i].hist(setting_sums, bins=50, alpha=0.7)
+    axes[i].set_title(f'Magnet Setting {i}')
+    axes[i].set_xlabel('Total Sum')
+    axes[i].set_ylabel('Count')
+    axes[i].grid(True, alpha=0.3)
+    axes[i].ticklabel_format(style='scientific', axis='x', scilimits=(0,0))
 
-    plt.tight_layout()
-    total_sums_path = datafile_path.replace('.h5', f'_total_sums_{split}.pdf')
-    plt.savefig(total_sums_path, dpi=300, bbox_inches='tight')
-    print(f"Total sums histograms saved to {total_sums_path}")
-    plt.close()
+plt.tight_layout()
+total_sums_path = datafile_path.replace('.h5', f'_total_sums_{split}.pdf')
+plt.savefig(total_sums_path, dpi=300, bbox_inches='tight')
+print(f"Total sums histograms saved to {total_sums_path}")
+plt.close()
