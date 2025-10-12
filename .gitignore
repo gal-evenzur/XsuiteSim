@@ -13,3 +13,5 @@ logs/
 Data/
 *.pyc
 xsuite-env/
+*.pt
+checkpoints/
