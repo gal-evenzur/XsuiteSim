@@ -29,7 +29,7 @@ def scale_tensor(dat_raw, std=False, minmax=True):
     
     # Min-max normalization to [0,1]
     if minmax:
-        for i in range(dat_raw.shape[0]):
+        for i in range(dat_raw.shape[0]): # Go through each sample
             batch = dat_raw[i]
             min_val = lib.min(batch)
             max_val = lib.max(batch)
@@ -42,7 +42,21 @@ def scale_tensor(dat_raw, std=False, minmax=True):
     return dat_raw
 
 def scale_Y(Y_raw, std=False, minmax=True):
-    pass
+    if not isinstance(Y_raw, torch.Tensor):
+        Y_raw = torch.from_numpy(Y_raw).float()
+
+    if std:
+        mean = torch.mean(Y_raw, dim=0)
+        std_val = torch.std(Y_raw, dim=0)
+        Y_raw = (Y_raw - mean) / torch.where(std_val > 0, std_val, torch.ones_like(std_val))
+
+    if minmax:
+        min_val = torch.min(Y_raw, dim=0)[0]
+        max_val = torch.max(Y_raw, dim=0)[0]
+        range_val = max_val - min_val
+        Y_raw = (Y_raw - min_val) / torch.where(range_val > 0, range_val, torch.ones_like(range_val))
+
+    return Y_raw
 
 
 def unscale_tensor(procss_data, params):
@@ -69,8 +83,6 @@ class SignalDataset(Dataset):
         self.xedges = torch.from_numpy(xedges).float()
         self.yedges = torch.from_numpy(yedges).float()
 
-        self.shift_array = torch.from_numpy(shift_array).float()
-        self.magnet_settings = torch.from_numpy(magnet_settings).float()
         histograms = torch.from_numpy(histograms).float()
         print("Histograms shape:", histograms.shape)
         # shape(histograms) = n_magnet_settings [=n_channels] x n_samples x 128 x 256
@@ -83,8 +95,14 @@ class SignalDataset(Dataset):
         self.X = transform(self.X, std=False, minmax=True)
         print("Scaled histograms shape:", self.X.shape)
 
-        self.Y = self.shift_array[0, :, 1:]  # Only keep the shifting parameters (exclude magnet settings)
-        # shape(Y) = (num_samples, num_shifts) = (num_samples, 29)
+        self.shift_array = torch.from_numpy(shift_array).float()
+        self.magnet_settings = torch.from_numpy(magnet_settings).float()
+        # Shape(shift_array) = (n_magnets, n_samples, n_params) = (3, n_samples, 30)
+
+        Y_raw = self.shift_array[0, :, 1:]  # Only keep the shifting parameters (exclude magnet settings)
+        # shape(Y_raw) = (num_samples, n_params - 1) = (num_samples, 29)
+        self.Y = scale_Y(Y_raw, std=False, minmax=True)
+        print("Shift array shape:", self.Y.shape)
 
     def __len__(self):
         return len(self.X)

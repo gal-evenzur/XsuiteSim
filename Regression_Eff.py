@@ -19,6 +19,7 @@ from ignite.metrics import Loss
 
 import matplotlib
 matplotlib.use('TkAgg')  # or 'Agg' for testing headless
+plt.rcParams['image.cmap'] = 'afmhot'
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -71,9 +72,10 @@ print(f"Training set: {len(trainSet)} samples")
 print(f"Input shape: {sample_input.shape}")
 print(f"Target shape: {sample_target.shape}")
 try:
+    raise Exception("Force no val/test")
     validateSet = SignalDataset(data_path, split="val")
     testSet = SignalDataset(data_path, split="test")
-except:
+except Exception:
     print("No separate validation/test sets found, using train set for all.")
     validateSet = SignalDataset(data_path, split="train")
     testSet = SignalDataset(data_path, split="train")
@@ -414,7 +416,7 @@ else:
     
 # %% ********TRAINING*********
 print("--TRAINING---")
-trainer.run(dataloader, max_epochs=hyperVar['n_epochs'])
+# trainer.run(dataloader, max_epochs=hyperVar['n_epochs'])
 
 # Restore the best model
 if best_model_info['params'] is not None:
@@ -446,5 +448,113 @@ def plot_loss_curves(eps, losses, val_losses):
     plt.legend()
     plt.grid(True)
 
-plt.show()
 plot_loss_curves(eps, losses, val_losses)
+plt.show()
+
+
+def plot_predictions_vs_actual(model, dataloader, device, n_samples=5):
+    """
+    Plot histograms with predictions vs actual parameters.
+    
+    Args:
+        model: The trained neural network model
+        dataloader: DataLoader containing test data
+        device: Device to run inference on
+        n_samples: Number of samples to plot (default: 5)
+    """
+    model.eval()
+    
+    # Get n_samples from the dataloader
+    samples_collected = 0
+    all_inputs = []
+    all_targets = []
+    all_predictions = []
+    
+    with torch.no_grad():
+        for X_batch, Y_batch in dataloader:
+            batch_size = X_batch.size(0)
+            remaining = n_samples - samples_collected
+            
+            if remaining <= 0:
+                break
+                
+            # Take only what we need from this batch
+            take = min(batch_size, remaining)
+            X = X_batch[:take].to(device)
+            Y = Y_batch[:take]
+            
+            # Get predictions
+            Y_pred = model(X).cpu()
+            
+            all_inputs.append(X_batch[:take].cpu())
+            all_targets.append(Y)
+            all_predictions.append(Y_pred)
+            
+            samples_collected += take
+    
+    # Concatenate all collected samples
+    inputs = torch.cat(all_inputs, dim=0)
+    targets = torch.cat(all_targets, dim=0)
+    predictions = torch.cat(all_predictions, dim=0)
+    
+    # Create subplots
+    fig, axes = plt.subplots(n_samples, 3, figsize=(18, 4*n_samples))
+    if n_samples == 1:
+        axes = axes.reshape(1, -1)
+    
+    for i in range(n_samples):
+        # Get the first channel (assuming multi-channel input)
+        img = inputs[i, 0].numpy()  # Take first channel
+        target = targets[i].numpy()
+        pred = predictions[i].numpy()
+        
+        # Calculate differences
+        diff = np.abs(pred - target)
+        
+        # Plot histogram
+        ax_hist = axes[i, 0]
+        im = ax_hist.imshow(img, origin='lower', aspect='auto')
+        ax_hist.set_title(f'Sample {i+1}: Histogram')
+        ax_hist.set_xlabel('X bins')
+        ax_hist.set_ylabel('Y bins')
+        plt.colorbar(im, ax=ax_hist)
+        
+        # Plot parameter comparison
+        ax_params = axes[i, 1]
+        param_indices = np.arange(len(target))
+        width = 0.35
+        
+        ax_params.bar(param_indices - width/2, target, width, label='Actual', alpha=0.7)
+        ax_params.bar(param_indices + width/2, pred, width, label='Predicted', alpha=0.7)
+        ax_params.set_xlabel('Parameter Index')
+        ax_params.set_ylabel('Parameter Value (scaled)')
+        ax_params.set_title(f'Sample {i+1}: Parameters Comparison')
+        ax_params.legend()
+        ax_params.grid(True, alpha=0.3)
+        
+        # Plot differences
+        ax_diff = axes[i, 2]
+        ax_diff.bar(param_indices, diff, color='red', alpha=0.7)
+        ax_diff.set_xlabel('Parameter Index')
+        ax_diff.set_ylabel('Absolute Difference')
+        ax_diff.set_title(f'Sample {i+1}: |Predicted - Actual|')
+        ax_diff.grid(True, alpha=0.3)
+        
+        # Add MSE text
+        mse = np.mean(diff**2)
+        ax_diff.text(0.98, 0.98, f'MSE: {mse:.6f}', 
+                    transform=ax_diff.transAxes,
+                    verticalalignment='top',
+                    horizontalalignment='right',
+                    bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
+    
+    plt.tight_layout()
+    return fig
+
+
+# Plot predictions vs actual for test set
+print("\nGenerating predictions vs actual plots...")
+fig_predictions = plot_predictions_vs_actual(model, test_loader, device, n_samples=5)
+plt.show()
+
+
