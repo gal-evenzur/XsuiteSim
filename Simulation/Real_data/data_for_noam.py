@@ -1245,11 +1245,11 @@ def xy_plot_line(line, particle_dir, ele_str, elementNames, n_bin=100):
 # %% main settings 
 print("Importing Finished")
 verbose = True
-plot = False
-rng = np.random.default_rng(1)
+plot = True
+rng = np.random.default_rng()
 
 magnet_settings = [490, 490.1, 490.2, 490.5]
-n_particles = 1e4
+n_particles = 1e5
 
 
 #%% ####### THIS PART SHOWS ALIVE PARTICLES AT EACH MONITOR (N_PARS CHANGES PER MONITOR) ########
@@ -1288,19 +1288,64 @@ if plot:
 
 
 #%% !!!!!!!!!! THIS PART SHOWS AT MONITORS + DIPOLE, WITH FINAL ALIVE PARTICLES ONLY (N_PARS IS CONSTANT) !!!!!!!!!! ########
-particle_list, s_values = track_line(line, particles)
 
-final_alive = particle_list[-1].state > 0
-alive_particles = []
-for p in particle_list:
-    alive_particles.append(p.filter(final_alive))
+particle_matrix = {}
+alive_matrix = {}
+
+places_matrix = {}
+for m_idx, m in enumerate(magnet_settings):
+    particle_list, s_values = track_line(line, particles)
+
+    particle_matrix[m] = particle_list
+
+    # particle_list = a list with 7 elements, that tracks the particles whole object at 7 different locations:
+    # 0: start, 1: dipole exit, 2: after m0, 3: after m1, ... 6: after m4 (end)
+
+    final_alive = particle_list[-1].state > 0
+    alive_particles = []
+    for p in particle_list:
+        alive_particles.append(p.filter(final_alive))
+
+    alive_matrix[m] = alive_particles
+
+    places_matrix[m] = []
+    for p in alive_particles:
+        x = p.x
+        y = p.y
+
+        places_matrix[m].append((x, y))
+
+# Plot the XY distributions at each monitor for the last magnet setting
+fig, axs = plt.subplots(1, 6, figsize=(21, 4), tight_layout=True)
+
+for idx in range(1, 7):
+    x, y = places_matrix[magnet_settings[2 ]][idx]
+    # Print sizes of x,y
+    print(f"Monitor {idx}: x shape: {x.shape}, y shape: {y.shape}")
+    h, xedges, yedges = np.histogram2d(x, y, bins=monitor_bins)
+    im = axs[idx-1].imshow(h.T, origin='lower', 
+                    extent=[xedges[0], xedges[-1], yedges[0], yedges[-1]], 
+                    aspect='auto')
+    axs[idx-1].set_xlabel('x [m]')
+    axs[idx-1].set_ylabel('y [m]')
+    p_alive = len(x)
+    axs[idx-1].set_title(f'After elem {idx}\nAlive={p_alive}')
+
+    plt.colorbar(im, ax=axs[idx-1], label='Counts')
 
 
-pz = []
-for p in alive_particles:
-    p_tot = p.delta * ref['p'] + ref['p'] # in eV/c
-    px = p.px * ref['p'] # in eV/c
-    py = p.py * ref['p'] # in eV/c
-    pz.append(np.sqrt(p_tot**2 - px**2 - py**2))
 
-    print(f"pz: min={min(pz[-1])*1e-6}, max={max(pz[-1])*1e-6}, mean={np.mean(pz[-1])*1e-6} in GeV/c, len = {len(pz[-1])}")
+pz = {}
+for m_idx, m in enumerate(magnet_settings):
+    alive_particles = alive_matrix[m]
+    pz[m] = []
+    for p in alive_particles:
+        p_tot = p.delta * ref['p'] + ref['p'] # in eV/c
+        px = p.px * ref['p'] # in eV/c
+        py = p.py * ref['p'] # in eV/c
+        pz[m].append(np.sqrt(p_tot**2 - px**2 - py**2) * 1e-9) # in GeV/c
+
+        print(f"pz: min={min(pz[m][-1])}, max={max(pz[m][-1])}, mean={np.mean(pz[m][-1])} in GeV/c, len = {len(pz[m][-1])}")
+    print(f"----------- FINISHED MAGNET SETTING = {m} -----------")
+
+plt.show()
