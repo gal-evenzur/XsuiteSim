@@ -15,6 +15,7 @@ import bremss as br
 from params import *
 from copy import deepcopy
 import time
+import pickle
 plt.rcParams['image.cmap'] = 'afmhot'
 # %% +++++++++Monitor sizes 
 npix_x = 1024
@@ -834,16 +835,6 @@ def twiss_plot(line, ref):
     fig1.subplots_adjust(left=.15, right=.92, hspace=.27)
 
 
-def plot_histogram(x, y, bins, title=""):
-    fig, ax = plt.subplots(figsize=(8, 6))
-    ax.hist2d(x, y, bins=bins, cmap='inferno', norm=LogNorm())
-    ax.set_xlabel(r'$x$ [m]')
-    ax.set_ylabel(r'$y$ [m]')
-    ax.set_title(title)
-    plt.colorbar(label='Counts')
-    plt.show()
-
-
 def plot_divergence(XX, PX, YY, PY, title=""):
     fig, axs = plt.subplots(1, 2, figsize=(10, 5), tight_layout=True)
            
@@ -1360,5 +1351,11 @@ def create_data(n_particles, ref=ref,verbose=verbose, rng=rng):
 
 Data = create_data(n_particles, verbose=verbose, rng=rng)
 print(f"Shape of Data: {len(Data)}, {len(Data[0])}, {len(Data[0][0])}, {len(Data[0][0][0])}")
+pydir = os.path.dirname(os.path.abspath(__file__)) # This results ""
+# Save Data to pickle file
+pickle_filename = os.path.join(pydir, 'Data.pkl')
 
+with open(pickle_filename, 'wb') as f:
+    pickle.dump(Data, f)
 
+print(f"Data saved to {pickle_filename}")
