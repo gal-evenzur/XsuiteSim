@@ -13,11 +13,16 @@ mkdir -p ${LOGDIR}
 
 cd ${BASEPATH}
 cd Simulation/batchScripts
+
+base_time=$(date +%s)
 ### User Input ###
 ### ========== ###
-for i in {0..1500}
+for i in {0..1000}
 do
-    echo "Submitting job ${i}..."
-    qsub -q N -v BASEPATH="${BASEPATH}",idx="${i}" -o ${LOGDIR} -e ${LOGDIR} pyRun.sh
-done
+    # Numeric ID = timestamp * 10000 + counter
+    # This ensures IDs are sortable and unique
+    unique_id=$((base_time * 10000 + i))
+    echo "Submitting job ${unique_id}..."
+    qsub -q N -v BASEPATH="${BASEPATH}",idx="${unique_id}" -o ${LOGDIR} -e ${LOGDIR} pyRun.sh
 
+done
