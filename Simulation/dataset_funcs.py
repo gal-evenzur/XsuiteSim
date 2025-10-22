@@ -33,17 +33,18 @@ def rand_from_scratch_histogram(shifts_template, shifts_range, n_batch, ref=ref,
             shifts = shifts_array_random(shifts_template, shifts_range, 1,
              rng=rng,
              magnet_settings=magnet_settings, is_array=False)
+            if change_beam:
+                states = generate_secondary_particles(shifts[0][0], n_particles, verbose=False, rng=rng) # Generate for first magnet setting
+                # DANGER __ WILL NOT WORK FOR 502 RUN ___ # 
+                particles = particles_from_states(states, ref, verbose=verbose)
             for magnet_idx in range(n_magnet_settings):
 
                 shift = shifts[magnet_idx][0]  # Extract the single configuration
                 # Create a beam and caculate histogram
                 line, env, ref = line_init(shifts=shift)
-                if change_beam:
-                    states = generate_secondary_particles(shift, n_particles, verbose=False, rng=rng)
-                    particles = particles_from_states(states, ref, verbose=verbose)
                 h, xedges, yedges = track_monitor(line, particles)
                 valid = is_valid(h)
-                if not valid:
+                if magnet_idx == 0 and not valid:
                     if verbose: print(f"Invalid histogram for magnet setting {magnet_settings[magnet_idx]} on attempt {attempt}")
                     break  # No need to check further if one is invalid
         

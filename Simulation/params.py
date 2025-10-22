@@ -46,7 +46,7 @@ num_shifts_range = count_numeric_values(shifts_range)
 
 
 MagnetSettings = shifts['magnetSettings']
-n_particles = 2e6
+n_particles = 3e5
 show_dead = True
 use_integration = False
 is_array = True

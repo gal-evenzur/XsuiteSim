@@ -7,12 +7,12 @@ import os
 import time
 
 # Start timing
-start_time = time.time()
+start_time = time.time() 
 
 try:
     idx = int(sys.argv[1])
 except:
-    idx = 0
+    idx = int(time.time() % 1e6)
 pydir = os.path.dirname(os.path.abspath(__file__)) # This results ""
 simdir = os.path.dirname(pydir)
 datafile_path = f"{simdir}/Data/h_{idx}.h5"
