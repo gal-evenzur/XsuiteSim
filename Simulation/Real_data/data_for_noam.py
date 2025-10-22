@@ -767,7 +767,7 @@ plot = False
 rng = np.random.default_rng(123)
 
 magnet_settings = [490, 490.1, 490.2, 490.5, 502]
-n_particles = 1e5
+n_particles = 5e5
 
 
 #%% !!!!!!!!!! THIS PART SHOWS AT MONITORS + DIPOLE, WITH FINAL ALIVE PARTICLES ONLY (N_PARS IS CONSTANT) !!!!!!!!!! ########
