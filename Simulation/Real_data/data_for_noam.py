@@ -767,7 +767,7 @@ plot = False
 rng = np.random.default_rng(123)
 
 magnet_settings = [490, 490.1, 490.2, 490.5, 502]
-n_particles = 3e5
+n_particles = 2.5e5
 
 
 #%% !!!!!!!!!! THIS PART SHOWS AT MONITORS + DIPOLE, WITH FINAL ALIVE PARTICLES ONLY (N_PARS IS CONSTANT) !!!!!!!!!! ########
@@ -847,7 +847,7 @@ Data = create_data(n_particles, verbose=verbose, rng=rng)
 print(f"Shape of Data: {len(Data)}, {len(Data[0])}, {len(Data[0][0])}, {len(Data[0][0][0])}")
 pydir = os.path.dirname(os.path.abspath(__file__)) # This results ""
 # Save Data to pickle file
-name = 'Data_no_integration_300k.pkl'
+name = 'Data_no_integration_250k.pkl'
 pickle_filename = os.path.join(pydir, name)
 
 with open(pickle_filename, 'wb') as f:
