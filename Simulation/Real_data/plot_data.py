@@ -38,9 +38,9 @@ def plot_histogram_from_data(Data, magnet_idx, monitor_idx):
     title = f"Magnet setting: {magnet_idx}, Monitor: {monitor_idx}"
     plot_histogram(x, y, bins=100, title=title)
 
-plot_histogram_from_data(Data, magnet_idx=3, monitor_idx=0)
+plot_histogram_from_data(Data, magnet_idx=4, monitor_idx=0)
 
-plot_histogram_from_data(Data, magnet_idx=3, monitor_idx=1)
+plot_histogram_from_data(Data, magnet_idx=4, monitor_idx=1)
 
 plot_histogram_from_data(Data, magnet_idx=0, monitor_idx=1)
 
