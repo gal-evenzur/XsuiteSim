@@ -457,7 +457,7 @@ def plot_from_file(filename, pdf=True,
     Assume that shift_list is in array form!!
     '''
 
-    xedges, yedges, magnet_settings, histograms, shift_list = import_histograms_hd5(filename, split=split)
+    xedges, yedges, magnet_settings, histograms, shift_list, time_stamps = import_histograms_hd5(filename, split=split)
     # Plot the histograms
 
     if pdf:
