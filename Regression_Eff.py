@@ -19,6 +19,7 @@ from ignite.metrics import Loss
 
 import matplotlib
 matplotlib.use('TkAgg')  # or 'Agg' for testing headless
+plt.rcParams['image.cmap'] = 'afmhot'
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -28,20 +29,19 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 # %%% PARAMS # 
 hyperVar = {
     # Data parameters
-    'batch_size': 8, # Bigger = stable gradients and smaller updates
+    'batch_size': 16, # Bigger = stable gradients and smaller updates
     'device': device,
 
     # Model parameters
-    'same_scale': True,
     'n_outputs': 29,
-    'Bnumber': 0,  # 0 for B0, 1 for B1, 2 for B2
+    'Bnumber': 1,  # 0 for B0, 1 for B1, 2 for B2
 
 
     # Optimiser parameters
-    'optimizer': AdamW,
-    'h_lr': 5e-4,
-    'b_lr': 1e-4,
-    'weight_decay': 0,
+    'optimizer': AdamW, # AdamW or Adam
+    'h_lr': 5e-2,
+    'b_lr': 5e-2,
+    'weight_decay': 1e-4,
     'wd_off_below_lr': 5e-6,
     'beta1': 0.9, # ++ smoother training but slower response to changes
     'beta2': 0.999, # -- faster adaptation of learning rates but potentially less stability
@@ -50,10 +50,10 @@ hyperVar = {
     # Training procedure parameters
     'freeze_backbone_epochs': 0,    # set to 0 to disable; no reinit needed since lr=0 during freeze
     'n_epochs': 100,
-    'patience': 6,
+    'patience': 100,
     'score_metric': 'val_loss',  # 'val_loss'
     'lr_factor': 0.5,
-    'lr_patience': 2, # number of no improvement rounds before lowering lr
+    'lr_patience': 10, # number of no improvement rounds before lowering lr
     'min_lr': 1e-6,
 
     # Plotting parameters
@@ -66,10 +66,16 @@ hyperVar = {
 start_time = time.time()
 data_path = 'merged_data/merged_data.h5'
 trainSet = SignalDataset(data_path, split="train")
+# Get a sample to check the full shape
+sample_input, sample_target = trainSet[0]
+print(f"Training set: {len(trainSet)} samples")
+print(f"Input shape: {sample_input.shape}")
+print(f"Target shape: {sample_target.shape}")
 try:
-    validateSet = SignalDataset(data_path, split="validate")
+    raise Exception("Force no val/test")
+    validateSet = SignalDataset(data_path, split="val")
     testSet = SignalDataset(data_path, split="test")
-except:
+except Exception:
     print("No separate validation/test sets found, using train set for all.")
     validateSet = SignalDataset(data_path, split="train")
     testSet = SignalDataset(data_path, split="train")
@@ -111,19 +117,19 @@ class EfficientNet(nn.Module):
         # --- Adapt for 1-channel (grayscale) input ---
         original_conv = self.net.features[0][0]  # First conv layer in EfficientNet
         self.net.features[0][0] = nn.Conv2d(
-            in_channels=4,
+            in_channels=3,
             out_channels=original_conv.out_channels,
             kernel_size=original_conv.kernel_size,
             stride=original_conv.stride,
             padding=original_conv.padding,
-            bias=True
+            bias=False
         )
         if pretrained:
             with torch.no_grad(): #assign channels
                 w = original_conv.weight.data
-                # Initialize each of the 4 channels with the same averaged weights
+                # Initialize each of the 3 channels with the same averaged weights
                 averaged_weights = w.mean(dim=1, keepdim=True)
-                self.net.features[0][0].weight.data = averaged_weights.repeat(1, 4, 1, 1)
+                self.net.features[0][0].weight.data = averaged_weights.repeat(1, 3, 1, 1)
 
         # --- Adapt the final layer for regression ---
         num_ftrs = self.net.classifier[1].in_features
@@ -194,7 +200,7 @@ val_losses = []
 eps = []
 lr = [hyperVar['h_lr'], hyperVar['b_lr']]
 
-criterion = nn.SmoothL1Loss()
+criterion = nn.MSELoss()
 
 param_groups = build_param_groups(
     model,
@@ -410,7 +416,7 @@ else:
     
 # %% ********TRAINING*********
 print("--TRAINING---")
-trainer.run(dataloader, max_epochs=hyperVar['n_epochs'])
+# trainer.run(dataloader, max_epochs=hyperVar['n_epochs'])
 
 # Restore the best model
 if best_model_info['params'] is not None:
@@ -426,3 +432,129 @@ print("Python <<<<< legit everything else (except C)\n")
 state = evaluator.run(test_loader)
 test_loss = state.metrics['loss']
 print(f"Test Loss: {test_loss:.4f}")
+
+
+# %% [] [] [] Plotting [] [] []
+# Plot training and validation loss over epochs
+
+def plot_loss_curves(eps, losses, val_losses):
+    plt.figure(figsize=(10, 6))
+    plt.plot(eps, losses, label='Training Loss')
+    plt.plot(eps, val_losses, label='Validation Loss')
+    plt.xlabel('Epoch')
+    plt.ylabel('Loss')
+    plt.yscale('log')
+    plt.title('Training and Validation Loss over Epochs')
+    plt.legend()
+    plt.grid(True)
+
+plot_loss_curves(eps, losses, val_losses)
+plt.show()
+
+
+def plot_predictions_vs_actual(model, dataloader, device, n_samples=5):
+    """
+    Plot histograms with predictions vs actual parameters.
+    
+    Args:
+        model: The trained neural network model
+        dataloader: DataLoader containing test data
+        device: Device to run inference on
+        n_samples: Number of samples to plot (default: 5)
+    """
+    model.eval()
+    
+    # Get n_samples from the dataloader
+    samples_collected = 0
+    all_inputs = []
+    all_targets = []
+    all_predictions = []
+    
+    with torch.no_grad():
+        for X_batch, Y_batch in dataloader:
+            batch_size = X_batch.size(0)
+            remaining = n_samples - samples_collected
+            
+            if remaining <= 0:
+                break
+                
+            # Take only what we need from this batch
+            take = min(batch_size, remaining)
+            X = X_batch[:take].to(device)
+            Y = Y_batch[:take]
+            
+            # Get predictions
+            Y_pred = model(X).cpu()
+            
+            all_inputs.append(X_batch[:take].cpu())
+            all_targets.append(Y)
+            all_predictions.append(Y_pred)
+            
+            samples_collected += take
+    
+    # Concatenate all collected samples
+    inputs = torch.cat(all_inputs, dim=0)
+    targets = torch.cat(all_targets, dim=0)
+    predictions = torch.cat(all_predictions, dim=0)
+    
+    # Create subplots
+    fig, axes = plt.subplots(n_samples, 3, figsize=(18, 4*n_samples))
+    if n_samples == 1:
+        axes = axes.reshape(1, -1)
+    
+    for i in range(n_samples):
+        # Get the first channel (assuming multi-channel input)
+        img = inputs[i, 0].numpy()  # Take first channel
+        target = targets[i].numpy()
+        pred = predictions[i].numpy()
+        
+        # Calculate differences
+        diff = np.abs(pred - target)
+        
+        # Plot histogram
+        ax_hist = axes[i, 0]
+        im = ax_hist.imshow(img, origin='lower', aspect='auto')
+        ax_hist.set_title(f'Sample {i+1}: Histogram')
+        ax_hist.set_xlabel('X bins')
+        ax_hist.set_ylabel('Y bins')
+        plt.colorbar(im, ax=ax_hist)
+        
+        # Plot parameter comparison
+        ax_params = axes[i, 1]
+        param_indices = np.arange(len(target))
+        width = 0.35
+        
+        ax_params.bar(param_indices - width/2, target, width, label='Actual', alpha=0.7)
+        ax_params.bar(param_indices + width/2, pred, width, label='Predicted', alpha=0.7)
+        ax_params.set_xlabel('Parameter Index')
+        ax_params.set_ylabel('Parameter Value (scaled)')
+        ax_params.set_title(f'Sample {i+1}: Parameters Comparison')
+        ax_params.legend()
+        ax_params.grid(True, alpha=0.3)
+        
+        # Plot differences
+        ax_diff = axes[i, 2]
+        ax_diff.bar(param_indices, diff, color='red', alpha=0.7)
+        ax_diff.set_xlabel('Parameter Index')
+        ax_diff.set_ylabel('Absolute Difference')
+        ax_diff.set_title(f'Sample {i+1}: |Predicted - Actual|')
+        ax_diff.grid(True, alpha=0.3)
+        
+        # Add MSE text
+        mse = np.mean(diff**2)
+        ax_diff.text(0.98, 0.98, f'MSE: {mse:.6f}', 
+                    transform=ax_diff.transAxes,
+                    verticalalignment='top',
+                    horizontalalignment='right',
+                    bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
+    
+    plt.tight_layout()
+    return fig
+
+
+# Plot predictions vs actual for test set
+print("\nGenerating predictions vs actual plots...")
+fig_predictions = plot_predictions_vs_actual(model, test_loader, device, n_samples=5)
+plt.show()
+
+

@@ -19,7 +19,7 @@ except:
     idx = 0
     pydir = os.path.dirname(os.path.abspath(__file__)) # This results "fresh-start/Simulation"
     simdir = os.path.dirname(pydir) # This results "fresh-start"
-    datafile_path = f"{simdir}/Data/h_{idx}.h5" # Default = "fresh-start/Data/h_0.h5"
+    datafile_path = f"{simdir}/merged_data/merged_data.h5" # Default = merged_data.h5
 print(f"Plotting {datafile_path}")
 
 cutoff_path = datafile_path.replace('.h5', f'_cutoff_{split}.pdf')
