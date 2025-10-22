@@ -4,6 +4,10 @@ from params import *
 import matplotlib.pyplot as plt
 import sys
 import os
+import time
+
+# Start timing
+start_time = time.time()
 
 try:
     idx = int(sys.argv[1])
@@ -18,11 +22,9 @@ print("saved file will be:", datafile_path)
 plt.rcParams['image.cmap'] = 'afmhot'
 rng = np.random.default_rng(seed=idx)
 # Define the magnet settings to test
-name = 'q0'
-setting = 'x'  
+
 magnet_settings = [490, 490.1, 490.2]
 change_beam = True
-shift_list = shifts_array_random(shifts, shifts_range, 5, magnet_settings=magnet_settings, is_array=is_array)
 
 n = {
     'train': 1,
@@ -51,9 +53,8 @@ if n['val'] > 0:
                                                             change_beam=change_beam, normalize=False, std=False, minmax=True)
     print("Histogram val shape:", histogram_val.shape)
 else:
-    shift_val = np.zeros((len(magnet_settings), 1, num_shifts))
-    histogram_val = np.zeros((len(magnet_settings), 1, monitor_bins[0], monitor_bins[1]))
-
+    shift_val = np.zeros_like(shift_train)
+    histogram_val = np.zeros_like(histogram_train)
 # < TEST >
 if n['test'] > 0:
     # shift_test, histogram_test, _, _ = rand_from_scratch_histogram(shifts_template=shifts, shifts_range=shifts_range,
@@ -67,8 +68,12 @@ if n['test'] > 0:
     histogram_test, xedges, yedges = shifts_to_histogram(shift_test, change_beam=True, rng=rng)
     print("Histogram test shape:", histogram_test.shape)
 else:
-    shift_test = np.zeros((len(magnet_settings), 1, num_shifts))
-    histogram_test = np.zeros((len(magnet_settings), 1, monitor_bins[0], monitor_bins[1]))
+    shift_test = np.zeros_like(shift_train)
+    histogram_test = np.zeros_like(histogram_train)
+
+# Calculate total execution time
+total_time = time.time() - start_time
+print(f"Total execution time: {total_time:.2f} seconds")
 
 # Save the data
 save_histogarms_hd5(histogram_train, shift_train, magnet_settings, xedges, yedges,
@@ -80,4 +85,7 @@ save_histogarms_hd5(histogram_val, shift_val, magnet_settings, xedges, yedges,
 save_histogarms_hd5(histogram_test, shift_test, magnet_settings, xedges, yedges,
                     dataset="test", write_add='a', filename=datafile_path)
 
-
+# Save execution time to HDF5
+import h5py
+with h5py.File(datafile_path, 'a') as f:
+    f.attrs['total_execution_time'] = total_time

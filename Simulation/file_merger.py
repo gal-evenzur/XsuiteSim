@@ -77,6 +77,7 @@ def merge_hdf5_files(input_files: List[str], output_file: str, verbose: bool = T
     
     xedges = None
     yedges = None
+    time_stamps = []
     
     # Read and collect data from all input files
     for i, file_path in enumerate(input_files):
@@ -93,6 +94,11 @@ def merge_hdf5_files(input_files: List[str], output_file: str, verbose: bool = T
                 if xedges is None:
                     xedges = f['xedges'][:]
                     yedges = f['yedges'][:]
+
+                if 'total_execution_time' in f.attrs:
+                    time_stamps.append(f.attrs['total_execution_time'])
+                else: 
+                    print(f"Warning: 'total_execution_time' attribute not found in {file_path}")
                 
                 # Process each dataset (train, val, test)
                 for dataset_name in ['train', 'val', 'test']:
@@ -122,7 +128,7 @@ def merge_hdf5_files(input_files: List[str], output_file: str, verbose: bool = T
         # Save edges
         f.create_dataset('xedges', data=xedges)
         f.create_dataset('yedges', data=yedges)
-        
+        f.create_dataset('time_stamps', data=np.array(time_stamps))
         # Save merged datasets
         for dataset_name in ['train', 'val', 'test']:
             if any(len(merged_data[dataset_name][key]) > 0 for key in merged_data[dataset_name]):

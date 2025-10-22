@@ -154,7 +154,8 @@ def import_histograms_hd5(filename=histogram_dat, split='train'):
         magnet_settings = f[f'{split}/magnet_settings'][:]
         histograms = f[f'{split}/histograms'][:]
         shifts_list = f[f'{split}/shifts_list'][:]
-    return xedges, yedges, magnet_settings, histograms, shifts_list
+        time_stamps = f['time_stamps'][:]
+    return xedges, yedges, magnet_settings, histograms, shifts_list, time_stamps
 
 # CREATE SHIFT LIST:--
 def ranges_to_array(ranges, n):

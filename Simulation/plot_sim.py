@@ -23,7 +23,7 @@ except:
 print(f"Plotting {datafile_path}")
 
 cutoff_path = datafile_path.replace('.h5', f'_cutoff_{split}.pdf')
-xedges, yedges, magnet_settings, histograms, shifts_list = import_histograms_hd5(datafile_path, split=split)
+xedges, yedges, magnet_settings, histograms, shifts_list, time_stamps = import_histograms_hd5(datafile_path, split=split)
 
 plot_from_file(filename=datafile_path, split=split)
 
@@ -103,6 +103,20 @@ for param, vals in shifts.items():
     plt.savefig(param_hist_path, dpi=300, bbox_inches='tight')
     print(f"{param} histograms plot saved to {param_hist_path}")
 
+# Plot histogram of time stamps
+plt.figure(figsize=(8, 6))
+plt.hist(time_stamps, bins=50, alpha=0.7)
+plt.title('Time Stamps Distribution')
+plt.xlabel('Time Stamp')
+plt.ylabel('Count')
+plt.grid(True, alpha=0.3)
+plt.ticklabel_format(style='scientific', axis='x', scilimits=(0,0))
+
+plt.tight_layout()
+time_stamps_path = datafile_path.replace('.h5', f'_time_stamps_{split}.pdf')
+plt.savefig(time_stamps_path, dpi=300, bbox_inches='tight')
+print(f"Time stamps histogram saved to {time_stamps_path}")
+plt.close()
 
 # Calculate total sum for each histogram
 # histograms shape: (n_magnet_settings, n_samples, height, width)
