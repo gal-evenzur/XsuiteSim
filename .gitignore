@@ -3,6 +3,7 @@ Data/
 *.h5
 *.gif
 *__pycache__
+Simulation/__pycache__
 Learning/xpart
 Learning/xtrack
 *.pdf
