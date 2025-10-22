@@ -9,10 +9,7 @@ def rand_from_scratch_histogram(shifts_template, shifts_range, n_batch, ref=ref,
                                 max_attempts=10,
                                 verbose=False, monitor_bins=monitor_bins):
     
-    if particles_file is None or change_beam:
-        states = generate_secondary_particles(shifts_template, n_particles, verbose=verbose, rng=rng)
-        particles = particles_from_states(states, ref, verbose=verbose)
-    else:
+    if not change_beam and particles_file:
         particles = import_particles_from_hdf5(particles_file, ref, verbose=verbose)
 
 
@@ -247,40 +244,36 @@ def shifts_array_random(shifts_template, shifts_range, n_samples, rng=default_rn
                     shift_matrix[m_idx, :, s_idx + 1] = low  # If range is zero, just use the fixed value
     else:
         shift_matrix = []
-        for mag_setting in magnet_settings:
-            row = [] # Each row corresponds to a magnet setting
-            shifts_copy = deepcopy(shifts_template)
-            shifts_copy['magnetSettings'] = mag_setting
 
-            # Generate n_samples random configurations corresponding to shift_ranges
-            for _ in range(n_samples):
-                shifts_sample = deepcopy(shifts_copy)
-                for element, settings in shifts_range.items(): 
-                    # element is like 'q0', settings is like {'x': (-0.001, 0.001), 'y': (-0.001, 0.001), ...}
-                    if type(settings) is not dict:
-                        continue  # Skip if settings is not a dictionary
-                    for position, rand_range in settings.items():
-                        # position is like 'x', min_val and max_val are the range limits
-                        if type(rand_range) != tuple or len(rand_range) != 2:
-                            continue  # Skip if range is not defined properly
-                        # Sample a random value within the specified range
-                        random_val = rng.uniform(*rand_range)
-                        shifts_sample[element][position] = random_val
-                row.append(deepcopy(shifts_sample))
-            shift_matrix.append(row)
+        # Generate n_samples random configurations corresponding to shift_ranges
+        row = [] # Each row corresponds to a magnet setting
+        for _ in range(n_samples):
+            shifts_sample = deepcopy(shifts_template)
+            for element, settings in shifts_range.items(): 
+                # element is like 'q0', settings is like {'x': (-0.001, 0.001), 'y': (-0.001, 0.001), ...}
+                if type(settings) is not dict:
+                    continue  # Skip if settings is not a dictionary
+                for position, rand_range in settings.items():
+                    # position is like 'x', min_val and max_val are the range limits
+                    if type(rand_range) != tuple or len(rand_range) != 2:
+                        continue  # Skip if range is not defined properly
+                    # Sample a random value within the specified range
+                    random_val = rng.uniform(*rand_range)
+                    shifts_sample[element][position] = random_val
+            row.append(deepcopy(shifts_sample))
+        
+        for mag_setting in magnet_settings:
+            row_rundown = deepcopy(row)
+            for shift in row_rundown:
+                shift['magnetSettings'] = mag_setting
+            shift_matrix.append(row_rundown)
     return shift_matrix
 
 # Processing functions:--
-def is_valid(h, threshold=2, point_threshold=10, verbose=False):
-    h = h.copy()
-    mask = h > threshold
-    h = np.where(mask, h, 0)
-
-    h_flat = h.flatten()
-    mask = h_flat > 0
-
+def is_valid(h, threshold=1, point_threshold=10, verbose=False):
+    a = np.sum(h > threshold)
     # Check if we have enough relevant points above the threshold
-    if np.sum(mask) <= point_threshold:
+    if a <= point_threshold:
         if verbose: print("Error: Not enough data points above threshold")
         return False
     else:
