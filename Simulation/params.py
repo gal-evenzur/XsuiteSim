@@ -46,9 +46,9 @@ num_shifts_range = count_numeric_values(shifts_range)
 
 
 MagnetSettings = shifts['magnetSettings']
-n_particles = 1e5
+n_particles = 2e6
 show_dead = True
-use_integration = False
+use_integration = True
 is_array = True
 dat_file = 'secondary_particles.h5'
 histogram_dat = 'histogram_data.h5'

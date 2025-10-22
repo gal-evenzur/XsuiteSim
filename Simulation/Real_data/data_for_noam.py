@@ -847,7 +847,8 @@ Data = create_data(n_particles, verbose=verbose, rng=rng)
 print(f"Shape of Data: {len(Data)}, {len(Data[0])}, {len(Data[0][0])}, {len(Data[0][0][0])}")
 pydir = os.path.dirname(os.path.abspath(__file__)) # This results ""
 # Save Data to pickle file
-pickle_filename = os.path.join(pydir, 'Data.pkl')
+name = 'Data_with_integration.pkl'
+pickle_filename = os.path.join(pydir, name)
 
 with open(pickle_filename, 'wb') as f:
     pickle.dump(Data, f)
