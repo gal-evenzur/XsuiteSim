@@ -764,10 +764,10 @@ def plot_multiple_magnet_settings(shifts_orig, mag_settings, axs=None):
 print("Importing Finished")
 verbose = True
 plot = False
-rng = np.random.default_rng()
+rng = np.random.default_rng(123)
 
 magnet_settings = [490, 490.1, 490.2, 490.5, 502]
-n_particles = 1e6
+n_particles = 1e5
 
 
 #%% !!!!!!!!!! THIS PART SHOWS AT MONITORS + DIPOLE, WITH FINAL ALIVE PARTICLES ONLY (N_PARS IS CONSTANT) !!!!!!!!!! ########
