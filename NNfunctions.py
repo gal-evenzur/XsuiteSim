@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 from ignite.metrics.metric import reinit__is_reduced
-from torch.utils.data import Dataset
+from torch.utils.data import Dataset, random_split
 import sys
 import os
 pyPath = os.path.dirname(os.path.abspath(__file__))
@@ -73,18 +73,23 @@ def unscale_tensor(procss_data, params):
     return procss_data
 
 class SignalDataset(Dataset):
-    def __init__(self, data_path, split="train", 
+    def __init__(self, data_path, split="train", ranges=None,
                  transform=scale_tensor):
         # Determine file type based on extension
         # Load HDF5 data
         
-        xedges, yedges, magnet_settings, histograms, shift_array = import_histograms_hd5(data_path, split=split)
+        xedges, yedges, magnet_settings, histograms, shift_array, time_stamps = import_histograms_hd5(data_path, split=split)
+        if ranges is not None:
+            histograms = histograms[:, ranges[0]:ranges[1], :, :]
+            shift_array = shift_array[:, ranges[0]:ranges[1], :]
+
         
+
+
         self.xedges = torch.from_numpy(xedges).float()
         self.yedges = torch.from_numpy(yedges).float()
 
         histograms = torch.from_numpy(histograms).float()
-        print("Histograms shape:", histograms.shape)
         # shape(histograms) = n_magnet_settings [=n_channels] x n_samples x 128 x 256
         
         # First, we want to reshape the data so that each sample is independent (using all magnet settings as channels)
@@ -93,7 +98,6 @@ class SignalDataset(Dataset):
         
         # Next, We'd like to scale each sample individually (notice we don't seperate magnet settings here):
         self.X = transform(self.X, std=False, minmax=True)
-        print("Scaled histograms shape:", self.X.shape)
 
         self.shift_array = torch.from_numpy(shift_array).float()
         self.magnet_settings = torch.from_numpy(magnet_settings).float()
@@ -102,7 +106,12 @@ class SignalDataset(Dataset):
         Y_raw = self.shift_array[0, :, 1:]  # Only keep the shifting parameters (exclude magnet settings)
         # shape(Y_raw) = (num_samples, n_params - 1) = (num_samples, 29)
         self.Y = scale_Y(Y_raw, std=False, minmax=True)
-        print("Shift array shape:", self.Y.shape)
+        # Get a sample to check the full shape
+        sample_input, sample_target = self.X[0], self.Y[0]
+        print(f"--------{split} set: {len(self.X)} samples. range: {ranges} --------")
+        print(f"Input shape: {sample_input.shape}")
+        print(f"Target shape: {sample_target.shape}")
+
 
     def __len__(self):
         return len(self.X)
@@ -113,10 +122,28 @@ class SignalDataset(Dataset):
     def get_magnet_settings(self):
         return self.magnet_settings
     
-    def unscale(self):
-        return self.X_params, self.Y_params
-    
-    
+
+
+def CreateTrainValTest(data_path, train_per, val_per, seed=42):
+    full_dataset = SignalDataset(data_path=data_path)
+    # 2. Get the total length
+    dataset_size = len(full_dataset)
+
+    # 3. Calculate the sizes for each split
+    train_size = int(dataset_size * train_per)
+    val_size = int(dataset_size * val_per)
+    test_size = dataset_size - train_size - val_size # Ensures all data is used
+
+    # 4. Perform the splits
+    #    Note: random_split can take more than two lengths
+    train_dataset, val_dataset, test_dataset = random_split(
+        full_dataset, 
+        [train_size, val_size, test_size],
+        generator=torch.Generator().manual_seed(seed) # for reproducible splits
+    )
+
+    return train_dataset, val_dataset, test_dataset
+
 
 
 def naive_solution(noisy_fft):
@@ -134,6 +161,7 @@ def naive_solution(noisy_fft):
     # Find indices of the maximum values in the noisy FFT signal
     ordered_peaks = []
     n_batches = noisy_fft.size(0)
+
     
     for i in range(n_batches):  # Iterate over each batch
         # Get the mean over time dimension

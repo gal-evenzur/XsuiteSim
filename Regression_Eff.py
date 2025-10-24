@@ -5,7 +5,6 @@ import time
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
-from torch.optim import Adam
 from torch.utils.data import DataLoader
 from torch.optim import Adam, AdamW
 from torchvision import models
@@ -19,8 +18,8 @@ from ignite.metrics import Loss
 
 import matplotlib
 matplotlib.use('TkAgg')  # or 'Agg' for testing headless
-plt.rcParams['image.cmap'] = 'afmhot'
 import matplotlib.pyplot as plt
+plt.rcParams['image.cmap'] = 'afmhot'
 import numpy as np
 
 
@@ -29,7 +28,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 # %%% PARAMS # 
 hyperVar = {
     # Data parameters
-    'batch_size': 16, # Bigger = stable gradients and smaller updates
+    'batch_size': 8, # Bigger = stable gradients and smaller updates
     'device': device,
 
     # Model parameters
@@ -40,20 +39,20 @@ hyperVar = {
     # Optimiser parameters
     'optimizer': AdamW, # AdamW or Adam
     'h_lr': 5e-2,
-    'b_lr': 5e-2,
+    'b_lr': 1e-2,
     'weight_decay': 1e-4,
-    'wd_off_below_lr': 5e-6,
+    'wd_off_below_lr': 1e-4,
     'beta1': 0.9, # ++ smoother training but slower response to changes
     'beta2': 0.999, # -- faster adaptation of learning rates but potentially less stability
     'amsgrad': False, 
 
     # Training procedure parameters
-    'freeze_backbone_epochs': 0,    # set to 0 to disable; no reinit needed since lr=0 during freeze
-    'n_epochs': 100,
-    'patience': 100,
+    'freeze_backbone_epochs': 2,    # set to 0 to disable; no reinit needed since lr=0 during freeze
+    'n_epochs': 20,
+    'patience': 5,
     'score_metric': 'val_loss',  # 'val_loss'
     'lr_factor': 0.5,
-    'lr_patience': 10, # number of no improvement rounds before lowering lr
+    'lr_patience': 3, # number of no improvement rounds before lowering lr
     'min_lr': 1e-6,
 
     # Plotting parameters
@@ -65,20 +64,7 @@ hyperVar = {
 # %% &&&&&& IMPORTING DATA &&&&&&
 start_time = time.time()
 data_path = 'merged_data/merged_data.h5'
-trainSet = SignalDataset(data_path, split="train")
-# Get a sample to check the full shape
-sample_input, sample_target = trainSet[0]
-print(f"Training set: {len(trainSet)} samples")
-print(f"Input shape: {sample_input.shape}")
-print(f"Target shape: {sample_target.shape}")
-try:
-    raise Exception("Force no val/test")
-    validateSet = SignalDataset(data_path, split="val")
-    testSet = SignalDataset(data_path, split="test")
-except Exception:
-    print("No separate validation/test sets found, using train set for all.")
-    validateSet = SignalDataset(data_path, split="train")
-    testSet = SignalDataset(data_path, split="train")
+trainSet, validateSet, testSet = CreateTrainValTest(data_path, 0.8, 0.1)
 
 dataloader = DataLoader(trainSet, batch_size=hyperVar["batch_size"], shuffle=True)
 validate_loader = DataLoader(validateSet, batch_size=hyperVar["batch_size"], shuffle=False)
@@ -448,8 +434,10 @@ def plot_loss_curves(eps, losses, val_losses):
     plt.legend()
     plt.grid(True)
 
+    os.makedirs('pdfs', exist_ok=True)
+    plt.savefig('pdfs/loss_curves.pdf', bbox_inches='tight', dpi=300)
+
 plot_loss_curves(eps, losses, val_losses)
-plt.show()
 
 
 def plot_predictions_vs_actual(model, dataloader, device, n_samples=5):
@@ -549,12 +537,14 @@ def plot_predictions_vs_actual(model, dataloader, device, n_samples=5):
                     bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
     
     plt.tight_layout()
+
+    os.makedirs('pdfs', exist_ok=True)
+    plt.savefig('pdfs/predictions_vs_actual.pdf', bbox_inches='tight', dpi=300)
     return fig
 
 
 # Plot predictions vs actual for test set
 print("\nGenerating predictions vs actual plots...")
 fig_predictions = plot_predictions_vs_actual(model, test_loader, device, n_samples=5)
-plt.show()
 
 
