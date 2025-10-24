@@ -4,7 +4,7 @@
 ### ====================== ###
 
 #PBS -m n
-#PBS -l select=1:ncpus=1:mem=4gb -l walltime=00:30:00 -l io=10
+#PBS -l select=1:ncpus=1:mem=40gb -l walltime=00:30:00 -l io=100
 
 export IOTHROTTLE_VERBOSE=1
 

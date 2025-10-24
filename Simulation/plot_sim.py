@@ -105,9 +105,9 @@ for param, vals in shifts.items():
 
 # Plot histogram of time stamps
 plt.figure(figsize=(8, 6))
-plt.hist(time_stamps, bins=50, alpha=0.7)
+plt.hist(time_stamps/3600, bins=50, alpha=0.7)
 plt.title('Time Stamps Distribution')
-plt.xlabel('Time Stamp')
+plt.xlabel('Time Stamp (hours)')
 plt.ylabel('Count')
 plt.grid(True, alpha=0.3)
 plt.ticklabel_format(style='scientific', axis='x', scilimits=(0,0))

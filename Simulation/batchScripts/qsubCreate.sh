@@ -17,7 +17,7 @@ cd Simulation/batchScripts
 base_time=$(date +%s)
 ### User Input ###
 ### ========== ###
-for i in {0..1000}
+for i in {0..1500}
 do
     # Numeric ID = timestamp * 10000 + counter
     # This ensures IDs are sortable and unique

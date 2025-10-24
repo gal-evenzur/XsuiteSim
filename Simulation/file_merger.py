@@ -51,7 +51,7 @@ def get_hdf5_files(directory_path: str, recursive: bool = False, extensions: Lis
     return hdf5_files
 
 def merge_hdf5_files(input_files: List[str], output_file: str, verbose: bool = True, 
-                    memory_efficient: bool = False):
+                    memory_efficient: bool = False, compress: Optional[int] = 6):
     """
     Merge multiple HDF5 files with train/val/test datasets into a single file.
     
@@ -118,6 +118,12 @@ def merge_hdf5_files(input_files: List[str], output_file: str, verbose: bool = T
                             
         except Exception as e:
             print(f"Error processing {file_path}: {str(e)}")
+            print(f"Deleting corrupted file: {file_path}")
+            try:
+                os.remove(file_path)
+                print(f"Successfully deleted {file_path}")
+            except OSError as delete_error:
+                print(f"Failed to delete {file_path}: {delete_error}")
             continue
     
     # Save merged data to output file
@@ -125,10 +131,10 @@ def merge_hdf5_files(input_files: List[str], output_file: str, verbose: bool = T
         print(f"Saving merged data to {output_file}")
     
     with h5py.File(output_file, 'w') as f:
-        # Save edges
-        f.create_dataset('xedges', data=xedges)
-        f.create_dataset('yedges', data=yedges)
-        f.create_dataset('time_stamps', data=np.array(time_stamps))
+        # Save edges with compression
+        f.create_dataset('xedges', data=xedges, compression='gzip', compression_opts=compress)
+        f.create_dataset('yedges', data=yedges, compression='gzip', compression_opts=compress)
+        f.create_dataset('time_stamps', data=np.array(time_stamps), compression='gzip', compression_opts=compress)
         # Save merged datasets
         for dataset_name in ['train', 'val', 'test']:
             if any(len(merged_data[dataset_name][key]) > 0 for key in merged_data[dataset_name]):
@@ -138,9 +144,9 @@ def merge_hdf5_files(input_files: List[str], output_file: str, verbose: bool = T
                 shift_list = merged_data[dataset_name]['shifts_list']
                 magnet_settings = merged_data[dataset_name]['magnet_settings']
 
-                group.create_dataset('magnet_settings', data=magnet_settings)
-                group.create_dataset('histograms', data=np.concatenate(hist_list, axis=1) if hist_list else np.array([]))
-                group.create_dataset('shifts_list', data=np.concatenate(shift_list, axis=1) if shift_list else np.array([]))
+                group.create_dataset('magnet_settings', data=magnet_settings, compression='gzip', compression_opts=compress)
+                group.create_dataset('histograms', data=np.concatenate(hist_list, axis=1) if hist_list else np.array([]), compression='gzip', compression_opts=compress)
+                group.create_dataset('shifts_list', data=np.concatenate(shift_list, axis=1) if shift_list else np.array([]), compression='gzip', compression_opts=compress)
                 # Concatenate and save each data type
                         
                 if verbose:
