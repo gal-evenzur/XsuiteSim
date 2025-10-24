@@ -47,7 +47,12 @@ histD_exit     = ROOT.TH2D("histD_exit",    f"Dipole exit plane;x_{{LAB}} [mm];y
 
 
 # load Data from pickle file
-pickle_filename = os.path.join(pydir, 'Data.pkl')
+# pickle_filename = os.path.join(pydir, 'Data.pkl')
+# pickle_filename = os.path.join(pydir, 'Data.pkl')
+# pickle_filename = os.path.join(pydir, 'Data_with_integration.pkl')
+# pickle_filename = os.path.join(pydir, 'Data_no_integration.pkl')
+# pickle_filename = os.path.join(pydir, 'Data_no_integration_300k.pkl')
+pickle_filename = os.path.join(pydir, 'Data_no_integration_250k.pkl')
 with open(pickle_filename, 'rb') as f:
     Data = pickle.load(f)
 
@@ -79,11 +84,13 @@ def plot_histogram_from_data(Data, magnet_idx, monitor_idx):
     
 
 def root_histogram_from_data(Data, h, magnet_idx, monitor_idx):
+    count = 0
     for par in Data[magnet_idx]:
         x = par[1][monitor_idx]*m2mm
         y = par[2][monitor_idx]*m2mm
-        print(f"x={x}, y={y}")
+        print(f"count={count} --> x={x}, y={y}")
         h.Fill(x,y)
+        count += 11
     return h
 
 
@@ -97,7 +104,7 @@ plot_histogram_from_data(Data, magnet_idx=3, monitor_idx=0)
 
 plt.show()
 
-root_histogram_from_data(Data, histD_exit, magnet_idx=3, monitor_idx=0)
+root_histogram_from_data(Data, histD_exit, magnet_idx=4, monitor_idx=0)
 
 cnv = ROOT.TCanvas("cnv","",550,500)
 cnv.SetTicks(1,1)
