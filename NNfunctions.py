@@ -1,6 +1,5 @@
 import torch
 import torch.nn as nn
-from ignite.metrics.metric import reinit__is_reduced
 from torch.utils.data import Dataset, random_split
 import sys
 import os

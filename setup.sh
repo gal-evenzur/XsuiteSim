@@ -4,18 +4,13 @@
 # Setup script for xsuite project
 # -------------------------------
 
-# Load ATLAS / LCG environment
-export ATLAS_LOCAL_ROOT_BASE=/cvmfs/atlas.cern.ch/repo/ATLASLocalRootBase
-source ${ATLAS_LOCAL_ROOT_BASE}/user/atlasLocalSetup.sh
-lsetup "views LCG_108 x86_64-el9-gcc13-opt"
-
 # Virtual environment folder name
 VENV_DIR="xsuite-env"
 
 # 1. Create venv if it doesn't exist
 if [ ! -d "$VENV_DIR" ]; then
     echo "Creating virtual environment: $VENV_DIR ..."
-    python3 -m venv --system-site-packages $VENV_DIR
+    python3 -m venv $VENV_DIR
 else
     echo "Virtual environment '$VENV_DIR' already exists."
 fi
@@ -24,8 +19,27 @@ fi
 echo "Activating virtual environment..."
 source ${VENV_DIR}/bin/activate
 
+
+# 6. Check and install xsuite
+if python -c "import xtrack" &> /dev/null; then
+    echo "Package 'xtrack' already installed."
+else
+    echo "Installing package 'xtrack'..."
+    pip install xtrack==0.55.0
+fi
+
+
+# 6. Check and install xsuite
+if python -c "import xpart" &> /dev/null; then
+    echo "Package 'xpart' already installed."
+else
+    echo "Installing package 'xpart'..."
+    pip install xpart==0.19.0
+fi
+
+
 # 3. List of required packages
-REQUIRED_PKGS=("xsuite" "numpy" "matplotlib")
+REQUIRED_PKGS=("numpy" "matplotlib" "torch" "h5py" "torchvision" "tkinter")
 
 # 4. Check and install missing packages
 for pkg in "${REQUIRED_PKGS[@]}"; do
@@ -37,17 +51,9 @@ for pkg in "${REQUIRED_PKGS[@]}"; do
     fi
 done
 
-# 5. Check and install pytorch
-if python -c "import torch" &> /dev/null; then
-    echo "Package 'torch' already installed."
-else
-    echo "Installing package 'pytorch'..."
-    pip install pytorch
-fi
-
 
 # 6. Check and install pytorch-ignite
-if pip show pytorch-ignite &> /dev/null; then
+if python -c "import ignite" &> /dev/null; then
     echo "Package 'pytorch-ignite' already installed."
 else
     echo "Installing package 'pytorch-ignite'..."

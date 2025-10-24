@@ -16,24 +16,29 @@ from ignite.handlers import EarlyStopping, ModelCheckpoint
 from ignite.contrib.handlers import ProgressBar
 from ignite.metrics import Loss
 
-import matplotlib
-matplotlib.use('TkAgg')  # or 'Agg' for testing headless
 import matplotlib.pyplot as plt
 plt.rcParams['image.cmap'] = 'afmhot'
 import numpy as np
 
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+print(f"Using device: {device}")
 
+try:
+    choice = sys.argv[1]
+    cluster_flag = True
+except:
+    cluster_flag = False
 # %%% PARAMS # 
 hyperVar = {
     # Data parameters
-    'batch_size': 8, # Bigger = stable gradients and smaller updates
+    'batch_size': 16, # Bigger = stable gradients and smaller updates
     'device': device,
+    'cluster_flag': cluster_flag,
 
     # Model parameters
     'n_outputs': 29,
-    'Bnumber': 1,  # 0 for B0, 1 for B1, 2 for B2
+    'Bnumber': 0,  # 0 for B0, 1 for B1, 2 for B2
 
 
     # Optimiser parameters
@@ -47,12 +52,12 @@ hyperVar = {
     'amsgrad': False, 
 
     # Training procedure parameters
-    'freeze_backbone_epochs': 2,    # set to 0 to disable; no reinit needed since lr=0 during freeze
+    'freeze_backbone_epochs': 1,    # set to 0 to disable; no reinit needed since lr=0 during freeze
     'n_epochs': 20,
-    'patience': 5,
+    'patience': 4,
     'score_metric': 'val_loss',  # 'val_loss'
     'lr_factor': 0.5,
-    'lr_patience': 3, # number of no improvement rounds before lowering lr
+    'lr_patience': 2, # number of no improvement rounds before lowering lr
     'min_lr': 1e-6,
 
     # Plotting parameters
@@ -61,6 +66,50 @@ hyperVar = {
     'unscaled_plot': True,
     'plot_diff': 0.5 #pT difference
 }
+# %% CHECKPOINTS #
+
+print("CHOOSE CHECKPOINT...")
+# Ask user if they want to resume training from a checkpoint
+checkpoint_dir = "./checkpoints"
+os.makedirs(checkpoint_dir, exist_ok=True)
+if os.path.exists(checkpoint_dir):
+    files = [f for f in os.listdir(checkpoint_dir) if f.endswith('.pt') or f.endswith('.pth')]
+    
+    if files:
+        print("\nAvailable checkpoint files:")
+        for i, file in enumerate(files):
+            print(f"{i+1}. {file}")
+        
+        while True:
+            try:
+
+                try:
+                    choice = int(sys.argv[1])
+                except:
+                    choice = int(input("\nSelect checkpoint number (or 0 to cancel): "))
+
+                if choice == 0:
+                    print("Canceled. Starting training from scratch...")
+                    break
+                elif 1 <= choice <= len(files):
+                    checkpoint_path = os.path.join(checkpoint_dir, files[choice-1])
+                    print(f"Loading checkpoint: {checkpoint_path}")
+                    # Load the model state
+                    checkpoint = torch.load(checkpoint_path, map_location=device)
+                    model.load_state_dict(checkpoint)
+                    break
+                else:
+                    print(f"Invalid choice. Please select a number between 0 and {len(files)}.")
+            except ValueError:
+                print("Please enter a valid number.")
+    else:
+        print("No checkpoint files found in the directory.")
+else:
+    print(f"Checkpoint directory {checkpoint_dir} does not exist.")
+    
+
+
+
 # %% &&&&&& IMPORTING DATA &&&&&&
 start_time = time.time()
 data_path = 'merged_data/merged_data.h5'
@@ -307,6 +356,9 @@ best_model_info = {
 # ---- Backbone freeze just for the first epoch (no optimizer rebuild) ----
 @trainer.on(Events.EPOCH_STARTED)
 def freeze_backbone_for_starting_epochs(engine):
+    # Record epoch start time
+    engine.state.epoch_start_time = time.time()
+    
     if engine.state.epoch <= hyperVar['freeze_backbone_epochs']:
         for pg in optimizer.param_groups:
             if pg.get('backbone', False):
@@ -321,6 +373,8 @@ def freeze_backbone_for_starting_epochs(engine):
 
 @trainer.on(Events.EPOCH_COMPLETED)
 def run_validation_loss_track(engine):
+    # Calculate epoch time
+    epoch_time = time.time() - engine.state.epoch_start_time
 
     if engine.state.epoch <= hyperVar['freeze_backbone_epochs']:
         for pg in optimizer.param_groups:
@@ -358,51 +412,16 @@ def run_validation_loss_track(engine):
             'learning_rates': lr.copy()
         }
         print(f"New best model found at epoch {trainer.state.epoch}!")
-    
-    print(f"Epoch {trainer.state.epoch} - Training Loss: {trainer.state.output:.4f}, "
+    print(f"Epoch {trainer.state.epoch} ({epoch_time:.2f}s) - Training Loss: {trainer.state.output:.4f}, "
             f"Validation Loss: {val_loss:.4f}, Best Epoch: {best_model_info['epoch']}")
     print("Current LRs:", [f"{a:.2e}" for a in lr[-1]])
 
 
 ProgressBar().attach(trainer, output_transform=lambda x: {'loss': x})
-# %% CHECKPOINTS #
 
-print("CHOOSE CHECKPOINT...")
-# Ask user if they want to resume training from a checkpoint
-checkpoint_dir = "./checkpoints"
-if os.path.exists(checkpoint_dir):
-    files = [f for f in os.listdir(checkpoint_dir) if f.endswith('.pt') or f.endswith('.pth')]
-    
-    if files:
-        print("\nAvailable checkpoint files:")
-        for i, file in enumerate(files):
-            print(f"{i+1}. {file}")
-        
-        while True:
-            try:
-                choice = int(input("\nSelect checkpoint number (or 0 to cancel): "))
-                if choice == 0:
-                    print("Canceled. Starting training from scratch...")
-                    break
-                elif 1 <= choice <= len(files):
-                    checkpoint_path = os.path.join(checkpoint_dir, files[choice-1])
-                    print(f"Loading checkpoint: {checkpoint_path}")
-                    # Load the model state
-                    checkpoint = torch.load(checkpoint_path, map_location=device)
-                    model.load_state_dict(checkpoint)
-                    break
-                else:
-                    print(f"Invalid choice. Please select a number between 0 and {len(files)}.")
-            except ValueError:
-                print("Please enter a valid number.")
-    else:
-        print("No checkpoint files found in the directory.")
-else:
-    print(f"Checkpoint directory {checkpoint_dir} does not exist.")
-    
 # %% ********TRAINING*********
 print("--TRAINING---")
-# trainer.run(dataloader, max_epochs=hyperVar['n_epochs'])
+trainer.run(dataloader, max_epochs=hyperVar['n_epochs'])
 
 # Restore the best model
 if best_model_info['params'] is not None:
