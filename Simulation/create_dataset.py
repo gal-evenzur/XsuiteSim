@@ -11,11 +11,15 @@ start_time = time.time()
 
 try:
     idx = int(sys.argv[1])
+    storage_path = sys.argv[2]
+    datafile_path = f"{storage_path}/Data/h_{idx}.h5"
 except:
     idx = int(time.time() % 1e6)
-pydir = os.path.dirname(os.path.abspath(__file__)) # This results ""
-simdir = os.path.dirname(pydir)
-datafile_path = f"{simdir}/Data/h_{idx}.h5"
+    pydir = os.path.dirname(os.path.abspath(__file__)) # This results ""
+    simdir = os.path.dirname(pydir)
+    datafile_path = f"{simdir}/Data/h_{idx}.h5"
+
+
 print("saved file will be:", datafile_path)
 
 
@@ -27,7 +31,7 @@ magnet_settings = [490, 490.1, 490.2]
 change_beam = True
 
 n = {
-    'train': 1,
+    'train': 4,
     'val': 0,
     'test': 0
 }

@@ -12,9 +12,10 @@ export IOTHROTTLE_VERBOSE=1
 ### ========================== ###
 
 cd ${BASEPATH}
+cd NN_batchScripts/
 source setup.sh
 ### Running the Job ###
 ### =============== ###
-
+cd ${BASEPATH}
 echo "Python initiate"
 python3 Regression_Eff.py ${CKPT_FLAG}

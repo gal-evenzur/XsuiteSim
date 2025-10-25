@@ -8,14 +8,16 @@
 
 export IOTHROTTLE_VERBOSE=1
 
-### Setting Up the Environment ###q
+### Setting Up the Environment ###
 ### ========================== ###
 
 cd ${BASEPATH}
+cd Simulation/batchScripts/
 source setup.sh
 ### Running the Job ###
 ### =============== ###
 
+cd ${BASEPATH}
 cd Simulation/
 echo "Python initiate"
-python3 create_dataset.py ${idx}
+python3 create_dataset.py ${idx} ${STORAGEPATH}

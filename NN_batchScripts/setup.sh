@@ -5,7 +5,7 @@
 # -------------------------------
 
 # Virtual environment folder name
-VENV_DIR="xsuite-env"
+VENV_DIR="pytorch-env"
 
 # 1. Create venv if it doesn't exist
 if [ ! -d "$VENV_DIR" ]; then

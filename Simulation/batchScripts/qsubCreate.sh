@@ -5,6 +5,7 @@
 
 export BASEPATH="/srv01/agrp/galeven/fresh-start/"
 export LOGDIR="${BASEPATH}/logs"
+STORAGEPATH="/storage/agrp/galeven/"
 mkdir -p ${LOGDIR}
 
 
@@ -23,6 +24,6 @@ do
     # This ensures IDs are sortable and unique
     unique_id=$((base_time * 10000 + i))
     echo "Submitting job ${unique_id}..."
-    qsub -q N -v BASEPATH="${BASEPATH}",idx="${unique_id}" -o ${LOGDIR} -e ${LOGDIR} pyRun.sh
+    qsub -q N -v BASEPATH="${BASEPATH}",idx="${unique_id}",STORAGEPATH="${STORAGEPATH}" -o ${LOGDIR} -e ${LOGDIR} pyRun.sh
 
 done

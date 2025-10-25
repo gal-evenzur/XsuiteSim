@@ -6,6 +6,7 @@
 export BASEPATH="/srv01/agrp/galeven/fresh-start"
 export LOGDIR="${BASEPATH}/logs"
 mkdir -p ${LOGDIR}
+STORAGEPATH="/storage/agrp/galeven/"
 
 
 ### Parameters Defining the LumiCalcProd Job ###
@@ -17,4 +18,4 @@ cd Simulation/batchScripts
 ### ========== ###
 
 echo "starting merge..."
-qsub -q N -v BASEPATH="${BASEPATH}",idx="${i}" -o ${LOGDIR} -e ${LOGDIR} pyMerge.sh
+qsub -q N -v BASEPATH="${BASEPATH}",idx="${i},STORAGEPATH=${STORAGEPATH}" -o ${LOGDIR} -e ${LOGDIR} pyMerge.sh

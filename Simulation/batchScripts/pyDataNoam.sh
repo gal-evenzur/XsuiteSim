@@ -12,10 +12,12 @@ export IOTHROTTLE_VERBOSE=1
 ### ========================== ###
 
 cd ${BASEPATH}
+cd Simulation/batchScripts/
 source setup.sh
 ### Running the Job ###
 ### =============== ###
 
+cd ${BASEPATH}
 cd Simulation/Real_data
 echo "Python initiate"
 python3 data_for_noam.py 

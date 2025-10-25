@@ -3,6 +3,7 @@ import numpy as np
 import os
 import glob
 from typing import List, Optional
+import sys
 
 def get_hdf5_files(directory_path: str, recursive: bool = False, extensions: List[str] = None) -> List[str]:
     """
@@ -273,13 +274,23 @@ def get_dataset_info(file_path: str):
         print(f"Error reading file: {str(e)}")
 
 # Get all HDF5 files from a directory
-pydir = os.path.dirname(os.path.abspath(__file__)) # This results "~/fresh-start/Simulation"
-maindir = os.path.dirname(pydir)  # This results "~/fresh-start"
-input_directory = os.path.join(maindir, "Data")
+try:
+    maindir = sys.argv[1]
+    input_directory = os.path.join(maindir, "Data")
+except:
+    pydir = os.path.dirname(os.path.abspath(__file__)) # This results "~/fresh-start/Simulation"
+    maindir = os.path.dirname(pydir)  # This results "~/fresh-start"
+    input_directory = os.path.join(maindir, "Data")
+
+print("Input directory:", input_directory)
 input_files = get_hdf5_files(input_directory)
 
 # Output merged file
-output_file = os.path.join(maindir, "merged_data", "merged_data.h5")
+
+pydir = os.path.dirname(os.path.abspath(__file__)) # This results "~/fresh-start/Simulation"
+homedir = os.path.dirname(pydir)  # This results "~/fresh-start"
+
+output_file = os.path.join(homedir, "merged_data", "merged_data.h5")
 
 # Optional: Check structure of input files before merging
 # print("Input file structures:")
