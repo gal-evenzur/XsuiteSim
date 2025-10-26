@@ -5,6 +5,9 @@
 # -------------------------------
 
 # Virtual environment folder name
+STORAGEPATH="/storage/agrp/galeven/"
+cd ${STORAGEPATH}
+
 VENV_DIR="pytorch-env"
 
 # 1. Create venv if it doesn't exist
