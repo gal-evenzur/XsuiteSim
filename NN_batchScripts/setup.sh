@@ -39,7 +39,7 @@ fi
 
 
 # 3. List of required packages
-REQUIRED_PKGS=("numpy" "matplotlib" "torch" "h5py" "torchvision" "tkinter")
+REQUIRED_PKGS=("numpy" "matplotlib" "torch" "h5py" "torchvision")
 
 # 4. Check and install missing packages
 for pkg in "${REQUIRED_PKGS[@]}"; do

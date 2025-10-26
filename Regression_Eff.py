@@ -32,19 +32,19 @@ except:
 # %%% PARAMS # 
 hyperVar = {
     # Data parameters
-    'batch_size': 16, # Bigger = stable gradients and smaller updates
+    'batch_size': 8, # Bigger = stable gradients and smaller updates
     'device': device,
     'cluster_flag': cluster_flag,
 
     # Model parameters
-    'n_outputs': 29,
+    'n_outputs': 22,
     'Bnumber': 0,  # 0 for B0, 1 for B1, 2 for B2
 
 
     # Optimiser parameters
     'optimizer': AdamW, # AdamW or Adam
-    'h_lr': 5e-2,
-    'b_lr': 1e-2,
+    'h_lr': 5e-1,
+    'b_lr': 1e-1,
     'weight_decay': 1e-4,
     'wd_off_below_lr': 1e-4,
     'beta1': 0.9, # ++ smoother training but slower response to changes
@@ -52,20 +52,23 @@ hyperVar = {
     'amsgrad': False, 
 
     # Training procedure parameters
-    'freeze_backbone_epochs': 1,    # set to 0 to disable; no reinit needed since lr=0 during freeze
-    'n_epochs': 20,
-    'patience': 4,
+    'freeze_backbone_epochs': 0,    # set to 0 to disable; no reinit needed since lr=0 during freeze
+    'n_epochs': 100,
+    'patience': 5,
     'score_metric': 'val_loss',  # 'val_loss'
     'lr_factor': 0.5,
     'lr_patience': 2, # number of no improvement rounds before lowering lr
-    'min_lr': 1e-6,
+    'min_lr': 1e-4,
 
     # Plotting parameters
     'n_plotted': 10,
-    'start': 100,
-    'unscaled_plot': True,
-    'plot_diff': 0.5 #pT difference
 }
+
+criterion = nn.MSELoss()
+
+hyperVar['suffix'] = f'{criterion.__class__.__name__}_B_{hyperVar["Bnumber"]}_wd{hyperVar["weight_decay"]}'
+
+
 # %% CHECKPOINTS #
 
 print("CHOOSE CHECKPOINT...")
@@ -143,6 +146,13 @@ class EfficientNet(nn.Module):
             self.net = models.efficientnet_b1(weights=models.EfficientNet_B1_Weights.DEFAULT if pretrained else None)
         elif hyperVar['Bnumber'] == 2:
             self.net = models.efficientnet_b2(weights=models.EfficientNet_B2_Weights.DEFAULT if pretrained else None)
+        elif hyperVar['Bnumber'] == 3:
+            self.net = models.efficientnet_b3(weights=models.EfficientNet_B3_Weights.DEFAULT if pretrained else None)
+        elif hyperVar['Bnumber'] == 4:
+            self.net = models.efficientnet_b4(weights=models.EfficientNet_B4_Weights.DEFAULT if pretrained else None)
+        elif hyperVar['Bnumber'] == 5:
+            self.net = models.efficientnet_b5(weights=models.EfficientNet_B5_Weights.DEFAULT if pretrained else None)
+
 
         # --- Freeze pre-trained layers if requested ---
         if pretrained and freeze_pretrained:
@@ -227,7 +237,7 @@ def set_bn_eval(m: nn.Module):
 
 # %% DELETING OLD PARAMETERS !!! 
 model = EfficientNet(n_classes=hyperVar['n_outputs'], pretrained=True, freeze_pretrained=False)
-
+print(f"Model initialized with EfficientNet B{hyperVar['Bnumber']} backbone.")
 # %% ENGINE SETUP #
 
 losses = []
@@ -235,7 +245,6 @@ val_losses = []
 eps = []
 lr = [hyperVar['h_lr'], hyperVar['b_lr']]
 
-criterion = nn.MSELoss()
 
 param_groups = build_param_groups(
     model,
@@ -330,7 +339,7 @@ os.makedirs(checkpoint_dir, exist_ok=True)
 
 checkpoint_handler = ModelCheckpoint(
     checkpoint_dir,
-    filename_prefix="best_model",
+    filename_prefix=f"{hyperVar['suffix']}",
     require_empty=False,
     score_function=score,  # Using the same score_function as early stopping
     score_name=hyperVar['score_metric'],
@@ -442,7 +451,7 @@ print(f"Test Loss: {test_loss:.4f}")
 # %% [] [] [] Plotting [] [] []
 # Plot training and validation loss over epochs
 
-def plot_loss_curves(eps, losses, val_losses):
+def plot_loss_curves(eps, losses, val_losses, name):
     plt.figure(figsize=(10, 6))
     plt.plot(eps, losses, label='Training Loss')
     plt.plot(eps, val_losses, label='Validation Loss')
@@ -454,12 +463,12 @@ def plot_loss_curves(eps, losses, val_losses):
     plt.grid(True)
 
     os.makedirs('pdfs', exist_ok=True)
-    plt.savefig('pdfs/loss_curves.pdf', bbox_inches='tight', dpi=300)
+    plt.savefig(f'pdfs/{name}.pdf', bbox_inches='tight', dpi=300)
 
-plot_loss_curves(eps, losses, val_losses)
+plot_loss_curves(eps, losses, val_losses, name=f'loss_curves_{hyperVar["suffix"]}')
 
 
-def plot_predictions_vs_actual(model, dataloader, device, n_samples=5):
+def plot_predictions_vs_actual(model, dataloader, device, name, n_samples=5):
     """
     Plot histograms with predictions vs actual parameters.
     
@@ -558,12 +567,13 @@ def plot_predictions_vs_actual(model, dataloader, device, n_samples=5):
     plt.tight_layout()
 
     os.makedirs('pdfs', exist_ok=True)
-    plt.savefig('pdfs/predictions_vs_actual.pdf', bbox_inches='tight', dpi=300)
+    plt.savefig(f'pdfs/{name}.pdf', bbox_inches='tight', dpi=300)
     return fig
 
 
 # Plot predictions vs actual for test set
 print("\nGenerating predictions vs actual plots...")
-fig_predictions = plot_predictions_vs_actual(model, test_loader, device, n_samples=5)
+fig_predictions = plot_predictions_vs_actual(model, test_loader, device,
+                                             name=f'predictions_vs_actual_{hyperVar["suffix"]}', n_samples=5)
 
 

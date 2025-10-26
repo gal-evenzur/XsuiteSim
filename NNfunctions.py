@@ -71,6 +71,37 @@ def unscale_tensor(procss_data, params):
 
     return procss_data
 
+def filter_variable_params(Y_raw, threshold=1e-10):
+    """
+    Filter out columns where parameters don't vary (min ≈ max).
+    
+    Args:
+        Y_raw: Tensor of shape (n_samples, n_params)
+        threshold: Minimum range to consider a parameter variable
+        
+    Returns:
+        Filtered tensor of shape (n_samples, n_active) and indices of active parameters
+    """
+    if not isinstance(Y_raw, torch.Tensor):
+        Y_raw = torch.from_numpy(Y_raw).float()
+    
+    # Calculate min and max for each parameter (column)
+    min_vals = torch.min(Y_raw, dim=0)[0]
+    max_vals = torch.max(Y_raw, dim=0)[0]
+    
+    # Find columns where range is greater than threshold
+    ranges = max_vals - min_vals
+    active_mask = ranges > threshold
+    active_indices = torch.where(active_mask)[0]
+    
+    # Filter to keep only variable columns
+    Y_filtered = Y_raw[:, active_mask]
+    
+    print(f"Filtered from {Y_raw.shape[1]} to {Y_filtered.shape[1]} active parameters")
+    print(f"Active parameter indices: {active_indices.tolist()}")
+    
+    return Y_filtered, active_indices
+
 class SignalDataset(Dataset):
     def __init__(self, data_path, split="train", ranges=None,
                  transform=scale_tensor):
@@ -104,7 +135,11 @@ class SignalDataset(Dataset):
 
         Y_raw = self.shift_array[0, :, 1:]  # Only keep the shifting parameters (exclude magnet settings)
         # shape(Y_raw) = (num_samples, n_params - 1) = (num_samples, 29)
-        self.Y = scale_Y(Y_raw, std=False, minmax=True)
+        
+        # Filter out non-variable parameters
+        Y_filtered, self.active_param_indices = filter_variable_params(Y_raw)
+        
+        self.Y = scale_Y(Y_filtered, std=False, minmax=True)
         # Get a sample to check the full shape
         sample_input, sample_target = self.X[0], self.Y[0]
         print(f"--------{split} set: {len(self.X)} samples. range: {ranges} --------")
