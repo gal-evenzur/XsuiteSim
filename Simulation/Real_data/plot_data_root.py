@@ -42,9 +42,11 @@ flangeTPL.SetLineColor(ROOT.kAzure+1)
 flangeTPL.SetLineWidth(1)
 
 ztitle = "Particles in full acceptance"
-histD_entrance = ROOT.TH2D("histD_entrance",f"Dipole entrance plane;x_{{LAB}} [mm];y_{{LAB}} [mm];{ztitle}",200,-80,+80, 200,-70,+90)
-histD_exit     = ROOT.TH2D("histD_exit",    f"Dipole exit plane;x_{{LAB}} [mm];y_{{LAB}} [mm];{ztitle}",    200,-80,+80, 200,-70,+90)
-
+histD_exit = ROOT.TH2D("histD_exit", f"Dipole exit plane;x_{{LAB}} [mm];y_{{LAB}} [mm];{ztitle}", 200,-80,+80, 200,-70,+90)
+hp = {"hPz_full":  ROOT.TH1D("hPz_full", ";p_{z} [GeV];Particles",100,0,10),
+      "hPz_small": ROOT.TH1D("hPz_small",";p_{z} [GeV];Particles",50,1.5,4.5),
+      "hPz_zoom":  ROOT.TH1D("hPz_zoom", ";p_{z} [GeV];Particles",40,1.5,3.5)
+}
 
 # load Data from pickle file
 # pickle_filename = os.path.join(pydir, 'Data.pkl')
@@ -83,15 +85,16 @@ def plot_histogram_from_data(Data, magnet_idx, monitor_idx):
     plot_histogram(x, y, bins=100, title=title)
     
 
-def root_histogram_from_data(Data, h, magnet_idx, monitor_idx):
+def root_histogram_from_data(Data, hxy, hp, magnet_idx, monitor_idx):
     count = 0
     for par in Data[magnet_idx]:
         x = par[1][monitor_idx]*m2mm
         y = par[2][monitor_idx]*m2mm
-        print(f"count={count} --> x={x}, y={y}")
-        h.Fill(x,y)
+        pz = par[3]
+        # print(f"count={count} --> x={x}, y={y}")
+        hxy.Fill(x,y)
+        for hname,hist in hp.items(): hist.Fill(pz)
         count += 11
-    return h
 
 
 
@@ -104,7 +107,7 @@ plot_histogram_from_data(Data, magnet_idx=3, monitor_idx=0)
 
 plt.show()
 
-root_histogram_from_data(Data, histD_exit, magnet_idx=4, monitor_idx=0)
+root_histogram_from_data(Data, histD_exit, hp, magnet_idx=4, monitor_idx=0)
 
 cnv = ROOT.TCanvas("cnv","",550,500)
 cnv.SetTicks(1,1)
@@ -157,3 +160,10 @@ s.DrawLatex(0.15,0.65,"Flange aperture")
 ROOT.gPad.RedrawAxis()
 cnv.Update()
 cnv.SaveAs(f"Xsuite_dipole_exit.pdf")
+
+
+f = ROOT.TFile("Xsuite.root","RECREATE")
+f.cd()
+for hname, hist in hp.items(): hist.Write()
+histD_exit.Write()
+f.Close()
