@@ -19,7 +19,7 @@ source setup.sh
 
 ### Running the Job ###
 ### =============== ###
-DATAPATH=${BASEPATH}/merged_data/merged_data.h5
+DATAPATH=${BASEPATH}/merged_data/merged_data_no_angs.h5
 # DATAPATH=${BASEPATH}/Data/h_${idx}.h5
 
 cd ${BASEPATH}

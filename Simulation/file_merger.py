@@ -276,11 +276,11 @@ def get_dataset_info(file_path: str):
 # Get all HDF5 files from a directory
 try:
     maindir = sys.argv[1]
-    input_directory = os.path.join(maindir, "Data")
+    input_directory = os.path.join(maindir, "Data_no_angs")
 except:
     pydir = os.path.dirname(os.path.abspath(__file__)) # This results "~/fresh-start/Simulation"
     maindir = os.path.dirname(pydir)  # This results "~/fresh-start"
-    input_directory = os.path.join(maindir, "Data")
+    input_directory = os.path.join(maindir, "Data_no_angs")
 
 print("Input directory:", input_directory)
 input_files = get_hdf5_files(input_directory)
@@ -290,7 +290,7 @@ input_files = get_hdf5_files(input_directory)
 pydir = os.path.dirname(os.path.abspath(__file__)) # This results "~/fresh-start/Simulation"
 homedir = os.path.dirname(pydir)  # This results "~/fresh-start"
 
-output_file = os.path.join(homedir, "merged_data", "merged_data.h5")
+output_file = os.path.join(homedir, "merged_data", "merged_data_no_angs.h5")
 
 # Optional: Check structure of input files before merging
 # print("Input file structures:")
