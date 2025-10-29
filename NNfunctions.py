@@ -1,16 +1,27 @@
 import torch
 import torch.nn as nn
-from torch.utils.data import Dataset, random_split
-import sys
-import os
-pyPath = os.path.dirname(os.path.abspath(__file__))
-simPath = os.path.join(pyPath, 'Simulation')
-sys.path.append(simPath)
-
-from Simulation.dataset_funcs import import_histograms_hd5
+from torch.utils.data import Dataset, random_split, DataLoader
+import h5py
 import numpy as np
+import torch.nn.functional as F
 
-def scale_tensor(dat_raw, std=False, minmax=True):
+
+def import_histograms_hd5(filename, split='train'):
+    with h5py.File(filename, 'r') as f:
+        xedges = f['xedges'][:]
+        yedges = f['yedges'][:]
+        magnet_settings = f[f'{split}/magnet_settings'][:]
+        histograms = f[f'{split}/histograms'][:]
+        shifts_list = f[f'{split}/shifts_list'][:]
+        try:
+            time_stamps = f['time_stamps'][:]
+        except: 
+            print("No time_stamps")
+            time_stamps = None
+    return xedges, yedges, magnet_settings, histograms, shifts_list, time_stamps
+
+
+def scale_tensor(dat_raw, std=False, minmax=False, const=True):
     if isinstance(dat_raw, torch.Tensor):
         lib = torch
     else:
@@ -37,7 +48,14 @@ def scale_tensor(dat_raw, std=False, minmax=True):
             else:
                 dat_raw[i] = lib.zeros_like(batch)
             
-    # print(f"data is {dat_raw.shape} - {min.shape} / ({max.shape} - {min.shape} ")
+    if const: # Scale by dividing by a constant factor 
+        const_factor = 10
+        if const_factor > 0:
+            dat_raw = dat_raw / const_factor
+        else:
+            dat_raw = lib.zeros_like(dat_raw)
+
+
     return dat_raw
 
 def scale_Y(Y_raw, std=False, minmax=True):
@@ -102,9 +120,36 @@ def filter_variable_params(Y_raw, threshold=1e-10):
     
     return Y_filtered, active_indices
 
+def squareinator(tensor):
+    """
+    Downsample the width dimension to match the height, creating square images.
+    Uses bilinear interpolation to preserve information from all pixels.
+    
+    Args:
+        tensor: Tensor of shape (n_samples, n_channels, height, width)
+        
+    Returns:
+        Downsampled tensor of shape (n_samples, n_channels, height, height)
+    """
+    n_samples, n_channels, height, width = tensor.shape
+    
+    if height == width:
+        return tensor
+    
+    # Use interpolate to downsample width to match height
+    # mode='bilinear' preserves spatial information better than cropping
+    tensor_square = F.interpolate(
+        tensor, 
+        size=(height, height),  # Target size: (256, 256)
+        mode='bilinear',
+        align_corners=False
+    )
+    
+    return tensor_square
+
 class SignalDataset(Dataset):
     def __init__(self, data_path, split="train", ranges=None,
-                 transform=scale_tensor):
+                 transform=scale_tensor, square_shape=True):
         # Determine file type based on extension
         # Load HDF5 data
         
@@ -124,10 +169,15 @@ class SignalDataset(Dataset):
         
         # First, we want to reshape the data so that each sample is independent (using all magnet settings as channels)
         self.X = histograms.permute(1, 0, 2, 3)
-        # shape(X) = n_samples x n_magnet_settings [=n_channels] x 128 x 256  
+        # shape(X) = n_samples x n_magnet_settings [=n_channels] x 256 x 128  
+
+        # Downsample to square shape (256x256) to preserve all information
+        if square_shape:
+            self.X = squareinator(self.X)
+            # shape(X) = n_samples x n_magnet_settings [=n_channels] x 256 x 256
         
         # Next, We'd like to scale each sample individually (notice we don't seperate magnet settings here):
-        self.X = transform(self.X, std=False, minmax=True)
+        self.X = transform(self.X, std=False, minmax=False, const=True)
 
         self.shift_array = torch.from_numpy(shift_array).float()
         self.magnet_settings = torch.from_numpy(magnet_settings).float()
@@ -179,59 +229,3 @@ def CreateTrainValTest(data_path, train_per, val_per, seed=42):
     return train_dataset, val_dataset, test_dataset
 
 
-
-def naive_solution(noisy_fft):
-    """
-    A naive solution to find the peaks in a noisy FFT signal.
-    Returns the second and third largest peaks in order of frequency appearance.
-    
-    Args:
-        noisy_fft (torch.Tensor): The noisy FFT signal.
-        Assume input of shape (batch_size, num_freq_bins, num_time_bins)
-
-    Returns:
-        torch.Tensor: The peak heights in order of frequency (left to right).
-    """
-    # Find indices of the maximum values in the noisy FFT signal
-    ordered_peaks = []
-    n_batches = noisy_fft.size(0)
-
-    
-    for i in range(n_batches):  # Iterate over each batch
-        # Get the mean over time dimension
-        fft_mean = noisy_fft[i].mean(dim=1)  # Average over time
-        
-        # Sort values in descending order and get both values and indices
-        sorted_values, sorted_indices = fft_mean.clone().detach().sort(descending=True)
-        
-        # Get indices of the second and third highest peaks
-        peak2_idx = sorted_indices[1].item()
-        peak3_idx = sorted_indices[2].item()
-        
-        # Get the actual values at these indices
-        peak2_val = fft_mean[peak2_idx]
-        peak3_val = fft_mean[peak3_idx]
-        
-        # Sort by frequency position (index), not by magnitude
-        if peak2_idx < peak3_idx:
-            ordered_peaks.append(torch.tensor([peak2_val, peak3_val], device=noisy_fft.device))
-        else:
-            ordered_peaks.append(torch.tensor([peak3_val, peak2_val], device=noisy_fft.device))
-    
-    return torch.stack(ordered_peaks)
-
-class NaiveSolutionWrapper(nn.Module):
-    def __init__(self, no_middle=True):
-        super().__init__()
-        self.no_middle = no_middle
-        
-    def forward(self, x):
-        # x is expected to be in shape [batch_size, 1, freq_bins, time_bins]
-        # Extract just the magnitude spectrogram (first channel)
-        x_mag = x.squeeze(1)  # Now [batch_size, freq_bins, time_bins]
-        
-        # Use the naive_solution function
-        peak_heights = naive_solution(x_mag)
-        
-        # Reshape output to match model output
-        return peak_heights

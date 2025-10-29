@@ -46,7 +46,7 @@ REQUIRED_PKGS=("numpy" "matplotlib" "torch" "h5py" "torchvision")
 
 # 4. Check and install missing packages
 for pkg in "${REQUIRED_PKGS[@]}"; do
-    if python -c "import $pkg" &> /dev/null; then
+    if pip show $pkg &> /dev/null; then
         echo "Package '$pkg' already installed."
     else
         echo "Installing package '$pkg'..."
@@ -56,7 +56,7 @@ done
 
 
 # 6. Check and install pytorch-ignite
-if python -c "import ignite" &> /dev/null; then
+if pip show pytorch-ignite &> /dev/null; then
     echo "Package 'pytorch-ignite' already installed."
 else
     echo "Installing package 'pytorch-ignite'..."

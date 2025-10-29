@@ -1,15 +1,12 @@
 # %% IMPORTS #
-from NNfunctions import *
 import time
+start_import_time = time.time()
+from NNfunctions import *
 
-import torch
-import torch.nn as nn
-from torch.utils.data import DataLoader
-from torch.utils.data import DataLoader
 from torch.optim import Adam, AdamW
 from torchvision import models
 from torch.optim.lr_scheduler import ReduceLROnPlateau
-
+print("Time for torch imports:", time.time() - start_import_time)
 
 from ignite.engine import Engine, Events
 from ignite.handlers import EarlyStopping, ModelCheckpoint
@@ -18,9 +15,9 @@ from ignite.metrics import Loss
 
 import matplotlib.pyplot as plt
 plt.rcParams['image.cmap'] = 'afmhot'
-import numpy as np
 
-
+start_script_time = time.time()
+print(f"Imports done in {start_script_time - start_import_time:.2f} seconds")
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"Using device: {device}")
 
@@ -32,33 +29,32 @@ except:
 # %%% PARAMS # 
 hyperVar = {
     # Data parameters
-    'batch_size': 8, # Bigger = stable gradients and smaller updates
+    'batch_size': 16, # Bigger = stable gradients and smaller updates
     'device': device,
     'cluster_flag': cluster_flag,
 
     # Model parameters
-    'n_outputs': 22,
     'Bnumber': 0,  # 0 for B0, 1 for B1, 2 for B2
 
 
     # Optimiser parameters
-    'optimizer': AdamW, # AdamW or Adam
-    'h_lr': 5e-1,
-    'b_lr': 1e-1,
-    'weight_decay': 1e-4,
-    'wd_off_below_lr': 1e-4,
+    'optimizer': Adam, # AdamW or Adam
+    'h_lr': 5e-2,
+    'b_lr': 5e-2,
+    'weight_decay': 0,
+    'wd_off_below_lr': 0,
     'beta1': 0.9, # ++ smoother training but slower response to changes
     'beta2': 0.999, # -- faster adaptation of learning rates but potentially less stability
     'amsgrad': False, 
 
     # Training procedure parameters
     'freeze_backbone_epochs': 0,    # set to 0 to disable; no reinit needed since lr=0 during freeze
-    'n_epochs': 100,
-    'patience': 5,
+    'n_epochs': 1000,
+    'patience': 30,
     'score_metric': 'val_loss',  # 'val_loss'
     'lr_factor': 0.5,
-    'lr_patience': 2, # number of no improvement rounds before lowering lr
-    'min_lr': 1e-4,
+    'lr_patience': 5, # number of no improvement rounds before lowering lr
+    'min_lr': 1e-5,
 
     # Plotting parameters
     'n_plotted': 10,
@@ -66,7 +62,7 @@ hyperVar = {
 
 criterion = nn.MSELoss()
 
-hyperVar['suffix'] = f'{criterion.__class__.__name__}_B_{hyperVar["Bnumber"]}_wd{hyperVar["weight_decay"]}'
+hyperVar['suffix'] = f'[big_dataset]{criterion.__class__.__name__}_B_{hyperVar["Bnumber"]}_wd{hyperVar["weight_decay"]}'
 
 
 # %% CHECKPOINTS #
@@ -115,7 +111,7 @@ else:
 
 # %% &&&&&& IMPORTING DATA &&&&&&
 start_time = time.time()
-data_path = 'merged_data/merged_data.h5'
+data_path = 'merged_data/merged_data_no_angs.h5'
 trainSet, validateSet, testSet = CreateTrainValTest(data_path, 0.8, 0.1)
 
 dataloader = DataLoader(trainSet, batch_size=hyperVar["batch_size"], shuffle=True)
@@ -159,18 +155,18 @@ class EfficientNet(nn.Module):
             for param in self.net.parameters():
                 param.requires_grad = False
 
-        # --- Adapt for 1-channel (grayscale) input ---
-        original_conv = self.net.features[0][0]  # First conv layer in EfficientNet
-        self.net.features[0][0] = nn.Conv2d(
-            in_channels=3,
-            out_channels=original_conv.out_channels,
-            kernel_size=original_conv.kernel_size,
-            stride=original_conv.stride,
-            padding=original_conv.padding,
-            bias=False
-        )
-        if pretrained:
-            with torch.no_grad(): #assign channels
+        # # --- Adapt for 1-channel (grayscale) input ---
+        # original_conv = self.net.features[0][0]  # First conv layer in EfficientNet
+        # self.net.features[0][0] = nn.Conv2d(
+        #     in_channels=3,
+        #     out_channels=original_conv.out_channels,
+        #     kernel_size=original_conv.kernel_size,
+        #     stride=original_conv.stride,
+        #     padding=original_conv.padding,
+        #     bias=False
+        # )
+        # if pretrained:
+        #     with torch.no_grad(): #assign channels
                 w = original_conv.weight.data
                 # Initialize each of the 3 channels with the same averaged weights
                 averaged_weights = w.mean(dim=1, keepdim=True)
@@ -182,8 +178,8 @@ class EfficientNet(nn.Module):
 
         # --- Unfreeze the new layers so they can be trained ---
         if pretrained and freeze_pretrained:
-            for param in self.net.features[0][0].parameters():
-                param.requires_grad = True
+            # for param in self.net.features[0][0].parameters():
+            #     param.requires_grad = True
             for param in self.net.classifier[1].parameters():
                 param.requires_grad = True
 
@@ -236,7 +232,11 @@ def set_bn_eval(m: nn.Module):
         pass
 
 # %% DELETING OLD PARAMETERS !!! 
-model = EfficientNet(n_classes=hyperVar['n_outputs'], pretrained=True, freeze_pretrained=False)
+# Get number of outputs from dataloader
+sample_batch = next(iter(dataloader))
+_, sample_targets = sample_batch
+hyperVar['n_outputs'] = sample_targets.shape[1]
+model = EfficientNet(n_classes=hyperVar['n_outputs'], pretrained=False, freeze_pretrained=False)
 print(f"Model initialized with EfficientNet B{hyperVar['Bnumber']} backbone.")
 # %% ENGINE SETUP #
 
@@ -425,8 +425,8 @@ def run_validation_loss_track(engine):
             f"Validation Loss: {val_loss:.4f}, Best Epoch: {best_model_info['epoch']}")
     print("Current LRs:", [f"{a:.2e}" for a in lr[-1]])
 
-
-ProgressBar().attach(trainer, output_transform=lambda x: {'loss': x})
+if not hyperVar['cluster_flag']:
+    ProgressBar().attach(trainer, output_transform=lambda x: {'loss': x})
 
 # %% ********TRAINING*********
 print("--TRAINING---")
@@ -576,4 +576,6 @@ print("\nGenerating predictions vs actual plots...")
 fig_predictions = plot_predictions_vs_actual(model, test_loader, device,
                                              name=f'predictions_vs_actual_{hyperVar["suffix"]}', n_samples=5)
 
-
+end_script_time = time.time()
+total_time = end_script_time - start_script_time
+print(f"\nTotal script time: {total_time/60:.2f} minutes")
