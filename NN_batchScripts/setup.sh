@@ -5,8 +5,15 @@
 # -------------------------------
 
 # Virtual environment folder name
-STORAGEPATH="/storage/agrp/galeven/"
+# STORAGEPATH="/storage/agrp/galeven/"
+STORAGEPATH=~/fresh-start/NN_batchScripts/
 cd ${STORAGEPATH}
+
+# Load ATLAS / LCG environment
+export ATLAS_LOCAL_ROOT_BASE=/cvmfs/atlas.cern.ch/repo/ATLASLocalRootBase
+source ${ATLAS_LOCAL_ROOT_BASE}/user/atlasLocalSetup.sh
+lsetup "views LCG_108_cuda x86_64-el9-gcc13-opt"
+
 
 VENV_DIR="pytorch-env"
 
@@ -20,25 +27,8 @@ fi
 
 # 2. Activate the venv
 echo "Activating virtual environment..."
-source ${VENV_DIR}/bin/activate
-
-
-# 6. Check and install xsuite
-if python -c "import xtrack" &> /dev/null; then
-    echo "Package 'xtrack' already installed."
-else
-    echo "Installing package 'xtrack'..."
-    pip install xtrack==0.55.0
-fi
-
-
-# 6. Check and install xsuite
-if python -c "import xpart" &> /dev/null; then
-    echo "Package 'xpart' already installed."
-else
-    echo "Installing package 'xpart'..."
-    pip install xpart==0.19.0
-fi
+source ${STORAGEPATH}/${VENV_DIR}/bin/activate
+echo "Virtual environment '$VENV_DIR' activated."
 
 
 # 3. List of required packages
@@ -53,7 +43,6 @@ for pkg in "${REQUIRED_PKGS[@]}"; do
         pip install $pkg
     fi
 done
-
 
 # 6. Check and install pytorch-ignite
 if pip show pytorch-ignite &> /dev/null; then

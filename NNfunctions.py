@@ -4,6 +4,7 @@ from torch.utils.data import Dataset, random_split, DataLoader
 import h5py
 import numpy as np
 import torch.nn.functional as F
+from ignite.metrics.metric import Metric
 
 
 def import_histograms_hd5(filename, split='train'):
@@ -59,6 +60,7 @@ def scale_tensor(dat_raw, std=False, minmax=False, const=True):
     return dat_raw
 
 def scale_Y(Y_raw, std=False, minmax=True):
+    unscale_params = {}
     if not isinstance(Y_raw, torch.Tensor):
         Y_raw = torch.from_numpy(Y_raw).float()
 
@@ -66,14 +68,19 @@ def scale_Y(Y_raw, std=False, minmax=True):
         mean = torch.mean(Y_raw, dim=0)
         std_val = torch.std(Y_raw, dim=0)
         Y_raw = (Y_raw - mean) / torch.where(std_val > 0, std_val, torch.ones_like(std_val))
+        unscale_params['norm'] = (mean, std_val) 
+        # shape(mean) = (n_params,), shape(std) = (n_params,)
+
 
     if minmax:
         min_val = torch.min(Y_raw, dim=0)[0]
         max_val = torch.max(Y_raw, dim=0)[0]
         range_val = max_val - min_val
         Y_raw = (Y_raw - min_val) / torch.where(range_val > 0, range_val, torch.ones_like(range_val))
+        unscale_params['minmax'] = (min_val, max_val)
+        # shape(min_val) = (n_params,), shape(max_val) = (n_params,)
 
-    return Y_raw
+    return Y_raw, unscale_params
 
 
 def unscale_tensor(procss_data, params):
@@ -177,6 +184,7 @@ class SignalDataset(Dataset):
             # shape(X) = n_samples x n_magnet_settings [=n_channels] x 256 x 256
         
         # Next, We'd like to scale each sample individually (notice we don't seperate magnet settings here):
+        # Just divides by a constant factor of 10 -- > Maybe change later
         self.X = transform(self.X, std=False, minmax=False, const=True)
 
         self.shift_array = torch.from_numpy(shift_array).float()
@@ -189,7 +197,7 @@ class SignalDataset(Dataset):
         # Filter out non-variable parameters
         Y_filtered, self.active_param_indices = filter_variable_params(Y_raw)
         
-        self.Y = scale_Y(Y_filtered, std=False, minmax=True)
+        self.Y, self.unscale_Y = scale_Y(Y_filtered, std=False, minmax=True)
         # Get a sample to check the full shape
         sample_input, sample_target = self.X[0], self.Y[0]
         print(f"--------{split} set: {len(self.X)} samples. range: {ranges} --------")
@@ -205,6 +213,10 @@ class SignalDataset(Dataset):
 
     def get_magnet_settings(self):
         return self.magnet_settings
+    
+    def get_unscale_params(self):
+        return self.unscale_Y
+
     
 
 
@@ -225,7 +237,35 @@ def CreateTrainValTest(data_path, train_per, val_per, seed=42):
         [train_size, val_size, test_size],
         generator=torch.Generator().manual_seed(seed) # for reproducible splits
     )
+    # To get unscale parameters:
+    # unscale_params = train_dataset.dataset.get_unscale_params()
 
     return train_dataset, val_dataset, test_dataset
 
+
+class perc_error_per_parameter(Metric):
+    '''Computes the percentage error per parameter for regression tasks.
+    Returns tensor of shape (n_parameters,) with average percentage error for each parameter. 
+    '''
+    def __init__(self, output_transform=lambda x: x, device="cpu"):
+        super(perc_error_per_parameter, self).__init__(output_transform=output_transform, device=device)
+
+    def reset(self):
+        self.sum_errors = None
+        self.num_examples = 0
+
+    def update(self, output):
+        y_pred, y = output
+        abs_errors = torch.abs(y_pred - y)
+        perc_errors = abs_errors / torch.clamp(torch.abs(y), min=1e-8) * 100  # Avoid division by zero
+        batch_sum = torch.sum(perc_errors, dim=0)
+        
+        if self.sum_errors is None:
+            self.sum_errors = batch_sum
+        else:
+            self.sum_errors += batch_sum
+        self.num_examples += y.shape[0]
+
+    def compute(self):
+        return self.sum_errors / self.num_examples if self.num_examples > 0 else 0.0
 

@@ -1,5 +1,8 @@
 # %% IMPORTS #
 import time
+import sys
+sys.modules['horovod'] = None
+sys.modules['horovod.torch'] = None
 start_import_time = time.time()
 from NNfunctions import *
 
@@ -13,7 +16,7 @@ from ignite.handlers import EarlyStopping, ModelCheckpoint
 from ignite.contrib.handlers import ProgressBar
 from ignite.metrics import Loss
 
-import os, sys
+import os
 import matplotlib.pyplot as plt
 plt.rcParams['image.cmap'] = 'afmhot'
 
@@ -61,7 +64,7 @@ hyperVar = {
     'n_plotted': 10,
 }
 
-criterion = nn.L1Loss()
+criterion = nn.SmoothL1Loss()
 
 hyperVar['suffix'] = f'[big_dataset]{criterion.__class__.__name__}_B_{hyperVar["Bnumber"]}_wd{hyperVar["weight_decay"]}'
 
@@ -248,7 +251,6 @@ def supervised_evaluator(model, device="cpu"):
             X_batch, Y_batch = batch
             X, Y = X_batch.to(device), Y_batch.to(device)
             Y_pred = model(X)
-            # Removed masking unvalid predictions
             return Y_pred, Y
 
     engine = Engine(_interference)
@@ -432,7 +434,7 @@ else:
 
 # %% ********TRAINING*********
 print("--TRAINING---")
-trainer.run(dataloader, max_epochs=hyperVar['n_epochs'])
+# trainer.run(dataloader, max_epochs=hyperVar['n_epochs'])
 
 # Restore the best model
 if best_model_info['params'] is not None:
@@ -443,7 +445,10 @@ else:
 
  # %%   ------Evaluation of the model------
 set = testSet
-
+perc_error_per_parameter(
+    # Need to add correct transform function
+    output_transform=lambda x: (x[0], x[1]), device=device
+).attach(evaluator, 'perc_pp')
 print("Python <<<<< legit everything else (except C)\n")
 state = evaluator.run(test_loader)
 test_loss = state.metrics['loss']
@@ -578,6 +583,16 @@ print("\nGenerating predictions vs actual plots...")
 fig_predictions = plot_predictions_vs_actual(model, test_loader, device,
                                              name=f'predictions_vs_actual_{hyperVar["suffix"]}', n_samples=5)
 
-end_script_time = time.time()
-total_time = end_script_time - start_script_time
-print(f"\nTotal script time: {total_time/60:.2f} minutes")
+def Plot_perc_error(percs, name):
+    plt.figure(figsize=(10, 6))
+    plt.bar(range(len(percs)), percs.cpu().numpy())
+    plt.xlabel('Parameter Index')
+    plt.ylabel('Average Percentage Error (%)')
+    plt.title('Percentage Error per Parameter on Test Set')
+    plt.grid(True)
+
+    os.makedirs('pdfs', exist_ok=True)
+    plt.savefig(f'pdfs/{name}.pdf', bbox_inches='tight', dpi=300)
+
+Plot_perc_error(state.metrics['perc_pp'], name=f'pepp_{hyperVar["suffix"]}')
+print(f"\nTotal script time: {(time.time() - start_script_time)/60:.2f} minutes")
