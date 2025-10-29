@@ -13,6 +13,7 @@ from ignite.handlers import EarlyStopping, ModelCheckpoint
 from ignite.contrib.handlers import ProgressBar
 from ignite.metrics import Loss
 
+import os, sys
 import matplotlib.pyplot as plt
 plt.rcParams['image.cmap'] = 'afmhot'
 
@@ -60,52 +61,11 @@ hyperVar = {
     'n_plotted': 10,
 }
 
-criterion = nn.MSELoss()
+criterion = nn.L1Loss()
 
 hyperVar['suffix'] = f'[big_dataset]{criterion.__class__.__name__}_B_{hyperVar["Bnumber"]}_wd{hyperVar["weight_decay"]}'
 
 
-# %% CHECKPOINTS #
-
-print("CHOOSE CHECKPOINT...")
-# Ask user if they want to resume training from a checkpoint
-checkpoint_dir = "./checkpoints"
-os.makedirs(checkpoint_dir, exist_ok=True)
-if os.path.exists(checkpoint_dir):
-    files = [f for f in os.listdir(checkpoint_dir) if f.endswith('.pt') or f.endswith('.pth')]
-    
-    if files:
-        print("\nAvailable checkpoint files:")
-        for i, file in enumerate(files):
-            print(f"{i+1}. {file}")
-        
-        while True:
-            try:
-
-                try:
-                    choice = int(sys.argv[1])
-                except:
-                    choice = int(input("\nSelect checkpoint number (or 0 to cancel): "))
-
-                if choice == 0:
-                    print("Canceled. Starting training from scratch...")
-                    break
-                elif 1 <= choice <= len(files):
-                    checkpoint_path = os.path.join(checkpoint_dir, files[choice-1])
-                    print(f"Loading checkpoint: {checkpoint_path}")
-                    # Load the model state
-                    checkpoint = torch.load(checkpoint_path, map_location=device)
-                    model.load_state_dict(checkpoint)
-                    break
-                else:
-                    print(f"Invalid choice. Please select a number between 0 and {len(files)}.")
-            except ValueError:
-                print("Please enter a valid number.")
-    else:
-        print("No checkpoint files found in the directory.")
-else:
-    print(f"Checkpoint directory {checkpoint_dir} does not exist.")
-    
 
 
 
@@ -167,10 +127,10 @@ class EfficientNet(nn.Module):
         # )
         # if pretrained:
         #     with torch.no_grad(): #assign channels
-                w = original_conv.weight.data
-                # Initialize each of the 3 channels with the same averaged weights
-                averaged_weights = w.mean(dim=1, keepdim=True)
-                self.net.features[0][0].weight.data = averaged_weights.repeat(1, 3, 1, 1)
+        #         w = original_conv.weight.data
+        #         # Initialize each of the 3 channels with the same averaged weights
+        #         averaged_weights = w.mean(dim=1, keepdim=True)
+        #         self.net.features[0][0].weight.data = averaged_weights.repeat(1, 3, 1, 1)
 
         # --- Adapt the final layer for regression ---
         num_ftrs = self.net.classifier[1].in_features
@@ -427,6 +387,48 @@ def run_validation_loss_track(engine):
 
 if not hyperVar['cluster_flag']:
     ProgressBar().attach(trainer, output_transform=lambda x: {'loss': x})
+
+# %% CHECKPOINTS #
+
+print("CHOOSE CHECKPOINT...")
+# Ask user if they want to resume training from a checkpoint
+checkpoint_dir = "./checkpoints"
+os.makedirs(checkpoint_dir, exist_ok=True)
+if os.path.exists(checkpoint_dir):
+    files = [f for f in os.listdir(checkpoint_dir) if f.endswith('.pt') or f.endswith('.pth')]
+    
+    if files:
+        print("\nAvailable checkpoint files:")
+        for i, file in enumerate(files):
+            print(f"{i+1}. {file}")
+        
+        while True:
+            try:
+
+                try:
+                    choice = int(sys.argv[1])
+                except:
+                    choice = int(input("\nSelect checkpoint number (or 0 to cancel): "))
+
+                if choice == 0:
+                    print("Canceled. Starting training from scratch...")
+                    break
+                elif 1 <= choice <= len(files):
+                    checkpoint_path = os.path.join(checkpoint_dir, files[choice-1])
+                    print(f"Loading checkpoint: {checkpoint_path}")
+                    # Load the model state
+                    checkpoint = torch.load(checkpoint_path, map_location=device)
+                    model.load_state_dict(checkpoint)
+                    break
+                else:
+                    print(f"Invalid choice. Please select a number between 0 and {len(files)}.")
+            except ValueError:
+                print("Please enter a valid number.")
+    else:
+        print("No checkpoint files found in the directory.")
+else:
+    print(f"Checkpoint directory {checkpoint_dir} does not exist.")
+    
 
 # %% ********TRAINING*********
 print("--TRAINING---")
