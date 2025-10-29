@@ -43,11 +43,12 @@ def rand_from_scratch_histogram(shifts_template, shifts_range, n_batch, ref=ref,
                 # Create a beam and caculate histogram
                 line, env, ref = line_init(shifts=shift)
                 h, xedges, yedges = track_monitor(line, particles)
-                valid = is_valid(h)
-                if magnet_idx == 0 and not valid:
-                    if verbose: print(f"Invalid histogram for magnet setting {magnet_settings[magnet_idx]} on attempt {attempt}")
-                    break  # No need to check further if one is invalid
-        
+                # It's enough so that only one magnet setting produces a valid histogram
+                valid_temp = is_valid(h)
+
+                if valid_temp:
+                    valid = True
+
                 histograms[magnet_idx, i] = h.T  # Transpose to match the orientation
                 s_array_form = shifts_to_array(shift, n=num_shifts)
                 shift_matrix[magnet_idx, i] = s_array_form
