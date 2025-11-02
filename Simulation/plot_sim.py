@@ -119,11 +119,11 @@ print(f"Time stamps histogram saved to {time_stamps_path}")
 plt.close()
 
 # Calculate total sum for each histogram
-# histograms shape: (n_magnet_settings, n_samples, height, width)
+# histograms shape: (n_samples, n_magnet_settings, height, width)
 total_sums = np.sum(histograms, axis=(2, 3))  # Sum over height and width dimensions
 
 # Create histogram plots for each magnet setting
-n_magnet_settings = total_sums.shape[0]
+n_magnet_settings = total_sums.shape[1]
 fig, axes = plt.subplots(1, n_magnet_settings, figsize=(4 * n_magnet_settings, 4))
 
 # Handle case where there's only one magnet setting
@@ -131,8 +131,8 @@ if n_magnet_settings == 1:
     axes = [axes]
 
 for i in range(n_magnet_settings):
-    setting_sums = total_sums[i]  # Array of total sums for this magnet setting
-    
+    setting_sums = total_sums[:, i]  # Array of total sums for this magnet setting
+
     axes[i].hist(setting_sums, bins=50, alpha=0.7)
     axes[i].set_title(f'Magnet Setting {i}')
     axes[i].set_xlabel('Total Sum')

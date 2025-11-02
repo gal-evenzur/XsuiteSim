@@ -407,20 +407,21 @@ def plot(xedges, yedges, magnet_settings, histograms, shift_list,
          pdfname=None,
         split='train', n_max=5, name='q0', setting='x', verbose=True, fft=False):
     n_samples = min(len(histograms), n_max)
-    fig, axs = plt.subplots(n_samples, len(histograms[0]), figsize=(len(magnet_settings)*6, 5), 
+    n_magnet_settings = len(magnet_settings)
+    fig, axs = plt.subplots(n_magnet_settings, n_samples, figsize=(n_magnet_settings*6, 5), 
                             tight_layout=True, sharex=True, sharey=True)
 
     for magnet_idx, m in enumerate(magnet_settings):
         for i in range(n_samples):
             shift = shift_list[i][magnet_idx]
             shift = array_to_shifts(shift, shifts_template=shifts)
-            if verbose: print(f"{m}: Started plotting change ", i+1, " of ", len(shift_list[magnet_idx]))
-            if len(shift_list) == 1:
+            if verbose: print(f"{m}: Started plotting change ", i+1, " of ", n_magnet_settings)
+            if n_samples == 1:
                 ax = axs[i]
-            elif n_samples == 1:
+            elif n_magnet_settings == 1:
                 ax = axs[magnet_idx]
             else:
-                ax = axs[i, magnet_idx]
+                ax = axs[magnet_idx, i] # Notice the axes are flipped from the histograms indexing
             h = histograms[i][magnet_idx]
             im = ax.imshow(h, origin='lower', extent=[xedges[0], xedges[-1], yedges[0], yedges[-1]], aspect='auto')
             change = shift[name][setting]
@@ -431,7 +432,7 @@ def plot(xedges, yedges, magnet_settings, histograms, shift_list,
             ax.yaxis.set_minor_locator(AutoMinorLocator(10))
             ax.grid(True,linewidth=0.25,alpha=0.25,which='major')
             plt.colorbar(im, ax=ax)
-            if verbose: print(f"{m}: Finished plotting change ", i+1, " of ", len(shift_list))
+            if verbose: print(f"{m}: Finished plotting change ", i+1, " of ", n_samples)
 
     if pdfname is not None:
         fig.savefig(pdfname)
