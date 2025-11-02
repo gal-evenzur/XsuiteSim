@@ -36,6 +36,7 @@ hyperVar = {
     'batch_size': 16, # Bigger = stable gradients and smaller updates
     'device': device,
     'cluster_flag': cluster_flag,
+    'num_workers': 4,  # Number of DataLoader workers
 
     # Model parameters
     'Bnumber': 0,  # 0 for B0, 1 for B1, 2 for B2
@@ -54,10 +55,10 @@ hyperVar = {
     # Training procedure parameters
     'freeze_backbone_epochs': 0,    # set to 0 to disable; no reinit needed since lr=0 during freeze
     'n_epochs': 1000,
-    'patience': 30,
+    'patience': 50,
     'score_metric': 'val_loss',  # 'val_loss'
     'lr_factor': 0.5,
-    'lr_patience': 5, # number of no improvement rounds before lowering lr
+    'lr_patience': 10, # number of no improvement rounds before lowering lr
     'min_lr': 1e-5,
 
     # Plotting parameters
@@ -66,7 +67,7 @@ hyperVar = {
 
 criterion = nn.SmoothL1Loss()
 
-hyperVar['suffix'] = f'[big_dataset]{criterion.__class__.__name__}_B_{hyperVar["Bnumber"]}_wd{hyperVar["weight_decay"]}'
+hyperVar['suffix'] = f'[tests]{criterion.__class__.__name__}_B_{hyperVar["Bnumber"]}_wd{hyperVar["weight_decay"]}_bs{hyperVar["batch_size"]}'
 
 
 
@@ -74,12 +75,23 @@ hyperVar['suffix'] = f'[big_dataset]{criterion.__class__.__name__}_B_{hyperVar["
 
 # %% &&&&&& IMPORTING DATA &&&&&&
 start_time = time.time()
-data_path = 'merged_data/merged_data_no_angs.h5'
-trainSet, validateSet, testSet = CreateTrainValTest(data_path, 0.8, 0.1)
+data_path = 'merged_data/merged_data_2.h5'
+trainSet, validateSet, testSet = CreateTrainValTest(data_path, 0.8, 0.1, seed=1138)
 
-dataloader = DataLoader(trainSet, batch_size=hyperVar["batch_size"], shuffle=True)
-validate_loader = DataLoader(validateSet, batch_size=hyperVar["batch_size"], shuffle=False)
-test_loader = DataLoader(testSet, batch_size=hyperVar["batch_size"], shuffle=False)
+dataloader = DataLoader(trainSet, 
+                        batch_size=hyperVar["batch_size"], 
+                        shuffle=True, 
+                        num_workers=hyperVar['num_workers']) # Use > 0 workers!
+
+validate_loader = DataLoader(validateSet, 
+                             batch_size=hyperVar["batch_size"], 
+                             shuffle=False, 
+                             num_workers=hyperVar['num_workers'])
+
+test_loader = DataLoader(testSet, 
+                         batch_size=hyperVar["batch_size"], 
+                         shuffle=False, 
+                         num_workers=hyperVar['num_workers'])
 
 load_time = time.time() - start_time
 print(f"Data loaded in {load_time:.2f} seconds")
@@ -434,7 +446,7 @@ else:
 
 # %% ********TRAINING*********
 print("--TRAINING---")
-# trainer.run(dataloader, max_epochs=hyperVar['n_epochs'])
+trainer.run(dataloader, max_epochs=hyperVar['n_epochs'])
 
 # Restore the best model
 if best_model_info['params'] is not None:

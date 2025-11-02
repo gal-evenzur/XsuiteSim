@@ -5,7 +5,6 @@
 # -------------------------------
 
 # Virtual environment folder name
-# STORAGEPATH="/storage/agrp/galeven/"
 STORAGEPATH=~/fresh-start/NN_batchScripts/
 cd ${STORAGEPATH}
 
@@ -31,18 +30,18 @@ source ${STORAGEPATH}/${VENV_DIR}/bin/activate
 echo "Virtual environment '$VENV_DIR' activated."
 
 
-# 3. List of required packages
-REQUIRED_PKGS=("numpy" "matplotlib" "torch" "h5py" "torchvision")
+# # 3. List of required packages
+# REQUIRED_PKGS=("numpy" "matplotlib" "torch" "h5py" "torchvision")
 
-# 4. Check and install missing packages
-for pkg in "${REQUIRED_PKGS[@]}"; do
-    if pip show $pkg &> /dev/null; then
-        echo "Package '$pkg' already installed."
-    else
-        echo "Installing package '$pkg'..."
-        pip install $pkg
-    fi
-done
+# # 4. Check and install missing packages
+# for pkg in "${REQUIRED_PKGS[@]}"; do
+#     if pip show $pkg &> /dev/null; then
+#         echo "Package '$pkg' already installed."
+#     else
+#         echo "Installing package '$pkg'..."
+#         pip install $pkg
+#     fi
+# done
 
 # 6. Check and install pytorch-ignite
 if pip show pytorch-ignite &> /dev/null; then
