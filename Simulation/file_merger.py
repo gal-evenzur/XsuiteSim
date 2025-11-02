@@ -142,17 +142,23 @@ def merge_hdf5_files(input_files: List[str], output_file: str, verbose: bool = T
                 group = f.create_group(dataset_name)
                 
                 hist_list = merged_data[dataset_name]['histograms']
+                hist_list = np.concatenate(hist_list, axis=1) if hist_list else np.array([])
+                hist_list = np.transpose(hist_list, (1, 0, 2, 3))
+
                 shift_list = merged_data[dataset_name]['shifts_list']
+                shift_list = np.concatenate(shift_list, axis=1) if shift_list else np.array([])
+                shift_list = np.transpose(shift_list, (1, 0, 2))
+
                 magnet_settings = merged_data[dataset_name]['magnet_settings']
 
                 group.create_dataset('magnet_settings', data=magnet_settings, compression='gzip', compression_opts=compress)
-                group.create_dataset('histograms', data=np.concatenate(hist_list, axis=1) if hist_list else np.array([]), compression='gzip', compression_opts=compress)
-                group.create_dataset('shifts_list', data=np.concatenate(shift_list, axis=1) if shift_list else np.array([]), compression='gzip', compression_opts=compress)
+                group.create_dataset('histograms', data=hist_list, compression='gzip', compression_opts=compress)
+                group.create_dataset('shifts_list', data=shift_list, compression='gzip', compression_opts=compress)
                 # Concatenate and save each data type
                         
                 if verbose:
-                    print(f"  {dataset_name}/histograms: {np.concatenate(hist_list, axis=1).shape}")
-                    print(f"  {dataset_name}/shifts_list: {np.concatenate(shift_list, axis=1).shape}")
+                    print(f"  {dataset_name}/histograms: {hist_list.shape}")
+                    print(f"  {dataset_name}/shifts_list: {shift_list.shape}")
                     print(f"  {dataset_name}/magnet_settings: {magnet_settings.shape}")
 
     if verbose:
@@ -276,11 +282,11 @@ def get_dataset_info(file_path: str):
 # Get all HDF5 files from a directory
 try:
     maindir = sys.argv[1]
-    input_directory = os.path.join(maindir, "Data_no_angs")
+    input_directory = os.path.join(maindir, "Data_2")
 except:
     pydir = os.path.dirname(os.path.abspath(__file__)) # This results "~/fresh-start/Simulation"
     maindir = os.path.dirname(pydir)  # This results "~/fresh-start"
-    input_directory = os.path.join(maindir, "Data_no_angs")
+    input_directory = os.path.join(maindir, "Data_2")
 
 print("Input directory:", input_directory)
 input_files = get_hdf5_files(input_directory)
@@ -290,7 +296,7 @@ input_files = get_hdf5_files(input_directory)
 pydir = os.path.dirname(os.path.abspath(__file__)) # This results "~/fresh-start/Simulation"
 homedir = os.path.dirname(pydir)  # This results "~/fresh-start"
 
-output_file = os.path.join(homedir, "merged_data", "merged_data_no_angs.h5")
+output_file = os.path.join(homedir, "merged_data", "merged_data_2.h5")
 
 # Optional: Check structure of input files before merging
 # print("Input file structures:")

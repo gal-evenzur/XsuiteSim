@@ -4,7 +4,7 @@
 ### ============================= ###
 
 export BASEPATH="/srv01/agrp/galeven/fresh-start/"
-export LOGDIR="${BASEPATH}/logs"
+export LOGDIR="${BASEPATH}/logs_data/"
 STORAGEPATH="/storage/agrp/galeven/"
 mkdir -p ${LOGDIR}
 

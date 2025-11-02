@@ -23,8 +23,8 @@ except:
 print(f"Plotting {datafile_path}")
 
 cutoff_path = datafile_path.replace('.h5', f'_cutoff_{split}.pdf')
-xedges, yedges, magnet_settings, histograms, shifts_list, time_stamps = import_histograms_hd5(datafile_path, split=split)
-
+xedges, yedges, magnet_settings, histograms, shifts_list, time_stamps = import_histograms_lightweight(datafile_path)
+print("Imported histogram data.")
 plot_from_file(filename=datafile_path, split=split)
 
 h = histograms.copy()
@@ -37,7 +37,7 @@ plot(xedges=xedges, yedges=yedges, magnet_settings=magnet_settings, histograms=h
 # Checked lmao
 # Flatten shifts_list across magnets and samples to get all parameter values
 # Shape: (n_samples, n_params)
-all_shifts = shifts_list[0]
+all_shifts = shifts_list[:,0]
 
 
 p_idx = 1

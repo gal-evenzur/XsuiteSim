@@ -1,3 +1,4 @@
+from fileinput import filename
 from sim_functions import *
 from params import *
 import time
@@ -152,6 +153,21 @@ def import_histograms_hd5(filename=histogram_dat, split='train'):
         yedges = f['yedges'][:]
         magnet_settings = f[f'{split}/magnet_settings'][:]
         histograms = f[f'{split}/histograms'][:]
+        shifts_list = f[f'{split}/shifts_list'][:]
+        try:
+            time_stamps = f['time_stamps'][:]
+        except: 
+            print("No time_stamps")
+            time_stamps = None
+    return xedges, yedges, magnet_settings, histograms, shifts_list, time_stamps
+
+def import_histograms_lightweight(filename, split='train', start=0, end=10):
+    # Only import a slice of histograms for memory efficiency
+    with h5py.File(filename, 'r') as f:
+        xedges = f['xedges'][:]
+        yedges = f['yedges'][:]
+        magnet_settings = f[f'{split}/magnet_settings'][:]
+        histograms = f[f'{split}/histograms'][start:end]
         shifts_list = f[f'{split}/shifts_list'][:]
         try:
             time_stamps = f['time_stamps'][:]
@@ -389,23 +405,23 @@ def plot_shift_array(shift_list, magnet_settings,
 
 def plot(xedges, yedges, magnet_settings, histograms, shift_list,
          pdfname=None,
-        split='train', n_max=5, name='q0', setting='x', verbose=False, fft=False):
-    n_changes = min(len(shift_list[0]), n_max)
-    fig, axs = plt.subplots(len(shift_list), n_changes, figsize=(len(magnet_settings)*6, 5), 
+        split='train', n_max=5, name='q0', setting='x', verbose=True, fft=False):
+    n_samples = min(len(histograms), n_max)
+    fig, axs = plt.subplots(n_samples, len(histograms[0]), figsize=(len(magnet_settings)*6, 5), 
                             tight_layout=True, sharex=True, sharey=True)
 
     for magnet_idx, m in enumerate(magnet_settings):
-        for i in range(n_changes):
-            shift = shift_list[magnet_idx][i]
+        for i in range(n_samples):
+            shift = shift_list[i][magnet_idx]
             shift = array_to_shifts(shift, shifts_template=shifts)
             if verbose: print(f"{m}: Started plotting change ", i+1, " of ", len(shift_list[magnet_idx]))
             if len(shift_list) == 1:
                 ax = axs[i]
-            elif n_changes == 1:
+            elif n_samples == 1:
                 ax = axs[magnet_idx]
             else:
-                ax = axs[magnet_idx, i]
-            h = histograms[magnet_idx][i]
+                ax = axs[i, magnet_idx]
+            h = histograms[i][magnet_idx]
             im = ax.imshow(h, origin='lower', extent=[xedges[0], xedges[-1], yedges[0], yedges[-1]], aspect='auto')
             change = shift[name][setting]
             valid = is_valid(h)
@@ -474,6 +490,3 @@ def plot_from_file(filename, pdf=True,
     plot(xedges, yedges, magnet_settings, histograms, shift_list,
          pdfname=pdfname,
          split=split, n_max=n_max, name=name, setting=setting, verbose=verbose, fft=fft)
-
-
-
