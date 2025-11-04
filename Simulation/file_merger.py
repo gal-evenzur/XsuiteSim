@@ -296,7 +296,7 @@ input_files = get_hdf5_files(input_directory)
 pydir = os.path.dirname(os.path.abspath(__file__)) # This results "~/fresh-start/Simulation"
 homedir = os.path.dirname(pydir)  # This results "~/fresh-start"
 
-output_file = os.path.join(homedir, "merged_data", "merged_data_2.h5")
+output_file = os.path.join(homedir, "merged_data", "merged_data_long.h5")
 
 # Optional: Check structure of input files before merging
 # print("Input file structures:")

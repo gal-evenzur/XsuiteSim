@@ -33,10 +33,10 @@ except:
 # %%% PARAMS # 
 hyperVar = {
     # Data parameters
-    'batch_size': 16, # Bigger = stable gradients and smaller updates
+    'batch_size': 8, # Bigger = stable gradients and smaller updates
     'device': device,
     'cluster_flag': cluster_flag,
-    'num_workers': 4,  # Number of DataLoader workers
+    'num_workers': 8,  # Number of DataLoader workers
 
     # Model parameters
     'Bnumber': 0,  # 0 for B0, 1 for B1, 2 for B2
@@ -69,7 +69,7 @@ criterion = nn.SmoothL1Loss()
 
 hyperVar['suffix'] = f'[tests]{criterion.__class__.__name__}_B_{hyperVar["Bnumber"]}_wd{hyperVar["weight_decay"]}_bs{hyperVar["batch_size"]}'
 
-
+print("NUM WORKERS:", hyperVar['num_workers'], "BATCH SIZE:", hyperVar['batch_size'])
 
 
 
