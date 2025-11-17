@@ -4,6 +4,7 @@ from torch.utils.data import Dataset, random_split, DataLoader
 import h5py
 import numpy as np
 import torch.nn.functional as F
+from ignite.metrics.metric import Metric
 
 
 def import_histograms_hd5(filename, split='train'):
@@ -59,6 +60,7 @@ def scale_tensor(dat_raw, std=False, minmax=False, const=True):
     return dat_raw
 
 def scale_Y(Y_raw, std=False, minmax=True):
+    unscale_params = {}
     if not isinstance(Y_raw, torch.Tensor):
         Y_raw = torch.from_numpy(Y_raw).float()
 
@@ -66,14 +68,19 @@ def scale_Y(Y_raw, std=False, minmax=True):
         mean = torch.mean(Y_raw, dim=0)
         std_val = torch.std(Y_raw, dim=0)
         Y_raw = (Y_raw - mean) / torch.where(std_val > 0, std_val, torch.ones_like(std_val))
+        unscale_params['norm'] = (mean, std_val) 
+        # shape(mean) = (n_params,), shape(std) = (n_params,)
+
 
     if minmax:
         min_val = torch.min(Y_raw, dim=0)[0]
         max_val = torch.max(Y_raw, dim=0)[0]
         range_val = max_val - min_val
         Y_raw = (Y_raw - min_val) / torch.where(range_val > 0, range_val, torch.ones_like(range_val))
+        unscale_params['minmax'] = (min_val, max_val)
+        # shape(min_val) = (n_params,), shape(max_val) = (n_params,)
 
-    return Y_raw
+    return Y_raw, unscale_params
 
 
 def unscale_tensor(procss_data, params):
@@ -128,84 +135,87 @@ def squareinator(tensor):
     Args:
         tensor: Tensor of shape (n_samples, n_channels, height, width)
         
-    Returns:
+    Returns
         Downsampled tensor of shape (n_samples, n_channels, height, height)
     """
-    n_samples, n_channels, height, width = tensor.shape
+    tensor_4d = tensor.unsqueeze(0) if tensor.dim() == 3 else tensor  # Add batch dim if missing
+    n_samples, n_channels, height, width = tensor_4d.shape
     
     if height == width:
-        return tensor
-    
+        return tensor_4d
+
     # Use interpolate to downsample width to match height
     # mode='bilinear' preserves spatial information better than cropping
     tensor_square = F.interpolate(
-        tensor, 
+        tensor_4d, 
         size=(height, height),  # Target size: (256, 256)
         mode='bilinear',
         align_corners=False
     )
-    
+    tensor_square = tensor_square.squeeze(0) if tensor.dim() == 3 else tensor_square  # Remove batch dim if added
     return tensor_square
 
 class SignalDataset(Dataset):
-    def __init__(self, data_path, split="train", ranges=None,
-                 transform=scale_tensor, square_shape=True):
-        # Determine file type based on extension
-        # Load HDF5 data
+    def __init__(self, data_path, split="train", transform=scale_tensor, square_shape=True):
         
-        xedges, yedges, magnet_settings, histograms, shift_array, time_stamps = import_histograms_hd5(data_path, split=split)
-        if ranges is not None:
-            histograms = histograms[:, ranges[0]:ranges[1], :, :]
-            shift_array = shift_array[:, ranges[0]:ranges[1], :]
+        self.file = None
+        self.data_path = data_path
+        self.transform = transform
+        self.square_shape = square_shape
+        self.split = split
 
-        
 
+        with h5py.File(data_path, 'r') as f:
+# --- Load small metadata (if needed) ---
+            self.xedges = torch.from_numpy(f['xedges'][:]).float()
+            self.yedges = torch.from_numpy(f['yedges'][:]).float()
+            self.magnet_settings = torch.from_numpy(f[f'{split}/magnet_settings'][:]).float()
+            shifts_list = f[f'{split}/shifts_list'][:]
 
-        self.xedges = torch.from_numpy(xedges).float()
-        self.yedges = torch.from_numpy(yedges).float()
+        shift_array = torch.from_numpy(shifts_list).float()
+        # Shape(shift_array) = (n_samples, n_magnets, n_params) = (n_samples, 3, 30)
 
-        histograms = torch.from_numpy(histograms).float()
-        # shape(histograms) = n_magnet_settings [=n_channels] x n_samples x 128 x 256
-        
-        # First, we want to reshape the data so that each sample is independent (using all magnet settings as channels)
-        self.X = histograms.permute(1, 0, 2, 3)
-        # shape(X) = n_samples x n_magnet_settings [=n_channels] x 256 x 128  
-
-        # Downsample to square shape (256x256) to preserve all information
-        if square_shape:
-            self.X = squareinator(self.X)
-            # shape(X) = n_samples x n_magnet_settings [=n_channels] x 256 x 256
-        
-        # Next, We'd like to scale each sample individually (notice we don't seperate magnet settings here):
-        self.X = transform(self.X, std=False, minmax=False, const=True)
-
-        self.shift_array = torch.from_numpy(shift_array).float()
-        self.magnet_settings = torch.from_numpy(magnet_settings).float()
-        # Shape(shift_array) = (n_magnets, n_samples, n_params) = (3, n_samples, 30)
-
-        Y_raw = self.shift_array[0, :, 1:]  # Only keep the shifting parameters (exclude magnet settings)
+        Y_raw = shift_array[:, 0, 1:]  # Only keep the shifting parameters (exclude magnet settings)
         # shape(Y_raw) = (num_samples, n_params - 1) = (num_samples, 29)
         
         # Filter out non-variable parameters
         Y_filtered, self.active_param_indices = filter_variable_params(Y_raw)
         
-        self.Y = scale_Y(Y_filtered, std=False, minmax=True)
-        # Get a sample to check the full shape
-        sample_input, sample_target = self.X[0], self.Y[0]
-        print(f"--------{split} set: {len(self.X)} samples. range: {ranges} --------")
-        print(f"Input shape: {sample_input.shape}")
-        print(f"Target shape: {sample_target.shape}")
-
+        self.Y, self.unscale_Y = scale_Y(Y_filtered, std=False, minmax=True)
+    
+        print(f"SignalDataset initialized with {self.Y.shape[0]} samples and {self.Y.shape[1]} active parameters.")
 
     def __len__(self):
-        return len(self.X)
+        # Return the number of samples
+        return self.Y.shape[0]
 
     def __getitem__(self, idx): #returns the 4 channels and the corresponding shifts
-        return self.X[idx], self.Y[idx]
+        # 1. Open file handle if this worker doesn't have one
+        if self.file is None:
+            self.file = h5py.File(self.data_path, 'r')
+        
+        histogram = self.file[f'{self.split}/histograms'][idx]
+
+        X_sample = torch.from_numpy(histogram).float()
+        # shape(histogram) = n_magnet_settings [=n_channels] x 128 x 256
+        
+        # Downsample to square shape (256x256) to preserve all information
+        if self.square_shape:
+            X_sample = squareinator(X_sample)
+            # shape(X) = n_samples x n_magnet_settings [=n_channels] x 256 x 256
+        
+        # Next, We'd like to scale each sample individually (notice we don't seperate magnet settings here):
+        # Just divides by a constant factor of 10 -- > Maybe change later
+        self.X_sample = self.transform(X_sample, std=False, minmax=False, const=True)
+        self.Y_sample = self.Y[idx]
+
+        return self.X_sample, self.Y_sample
 
     def get_magnet_settings(self):
         return self.magnet_settings
     
+    def get_unscale_params(self):
+        return self.unscale_Y
 
 
 def CreateTrainValTest(data_path, train_per, val_per, seed=42):
@@ -225,7 +235,35 @@ def CreateTrainValTest(data_path, train_per, val_per, seed=42):
         [train_size, val_size, test_size],
         generator=torch.Generator().manual_seed(seed) # for reproducible splits
     )
+    # To get unscale parameters:
+    # unscale_params = train_dataset.dataset.get_unscale_params()
 
     return train_dataset, val_dataset, test_dataset
 
+
+class perc_error_per_parameter(Metric):
+    '''Computes the percentage error per parameter for regression tasks.
+    Returns tensor of shape (n_parameters,) with average percentage error for each parameter. 
+    '''
+    def __init__(self, output_transform=lambda x: x, device="cpu"):
+        super(perc_error_per_parameter, self).__init__(output_transform=output_transform, device=device)
+
+    def reset(self):
+        self.sum_errors = None
+        self.num_examples = 0
+
+    def update(self, output):
+        y_pred, y = output
+        abs_errors = torch.abs(y_pred - y)
+        perc_errors = abs_errors / torch.clamp(torch.abs(y), min=1e-8) * 100  # Avoid division by zero
+        batch_sum = torch.sum(perc_errors, dim=0)
+        
+        if self.sum_errors is None:
+            self.sum_errors = batch_sum
+        else:
+            self.sum_errors += batch_sum
+        self.num_examples += y.shape[0]
+
+    def compute(self):
+        return self.sum_errors / self.num_examples if self.num_examples > 0 else 0.0
 

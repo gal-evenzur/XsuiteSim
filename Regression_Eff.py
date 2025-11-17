@@ -1,5 +1,8 @@
 # %% IMPORTS #
 import time
+import sys
+sys.modules['horovod'] = None
+sys.modules['horovod.torch'] = None
 start_import_time = time.time()
 from NNfunctions import *
 
@@ -13,6 +16,7 @@ from ignite.handlers import EarlyStopping, ModelCheckpoint
 from ignite.contrib.handlers import ProgressBar
 from ignite.metrics import Loss
 
+import os
 import matplotlib.pyplot as plt
 plt.rcParams['image.cmap'] = 'afmhot'
 
@@ -32,6 +36,7 @@ hyperVar = {
     'batch_size': 16, # Bigger = stable gradients and smaller updates
     'device': device,
     'cluster_flag': cluster_flag,
+    'num_workers': 4,  # Number of DataLoader workers
 
     # Model parameters
     'Bnumber': 0,  # 0 for B0, 1 for B1, 2 for B2
@@ -50,19 +55,19 @@ hyperVar = {
     # Training procedure parameters
     'freeze_backbone_epochs': 0,    # set to 0 to disable; no reinit needed since lr=0 during freeze
     'n_epochs': 1000,
-    'patience': 30,
+    'patience': 50,
     'score_metric': 'val_loss',  # 'val_loss'
     'lr_factor': 0.5,
-    'lr_patience': 5, # number of no improvement rounds before lowering lr
+    'lr_patience': 10, # number of no improvement rounds before lowering lr
     'min_lr': 1e-5,
 
     # Plotting parameters
     'n_plotted': 10,
 }
 
-criterion = nn.MSELoss()
+criterion = nn.L1Loss()
 
-hyperVar['suffix'] = f'[big_dataset]{criterion.__class__.__name__}_B_{hyperVar["Bnumber"]}_wd{hyperVar["weight_decay"]}'
+hyperVar['suffix'] = f'[tests]{criterion.__class__.__name__}_B_{hyperVar["Bnumber"]}_wd{hyperVar["weight_decay"]}_bs{hyperVar["batch_size"]}'
 
 
 # %% CHECKPOINTS #
@@ -111,12 +116,23 @@ else:
 
 # %% &&&&&& IMPORTING DATA &&&&&&
 start_time = time.time()
-data_path = 'merged_data/merged_data_no_angs.h5'
-trainSet, validateSet, testSet = CreateTrainValTest(data_path, 0.8, 0.1)
+data_path = 'merged_data/merged_data_2.h5'
+trainSet, validateSet, testSet = CreateTrainValTest(data_path, 0.8, 0.1, seed=1138)
 
-dataloader = DataLoader(trainSet, batch_size=hyperVar["batch_size"], shuffle=True)
-validate_loader = DataLoader(validateSet, batch_size=hyperVar["batch_size"], shuffle=False)
-test_loader = DataLoader(testSet, batch_size=hyperVar["batch_size"], shuffle=False)
+dataloader = DataLoader(trainSet, 
+                        batch_size=hyperVar["batch_size"], 
+                        shuffle=True, 
+                        num_workers=hyperVar['num_workers']) # Use > 0 workers!
+
+validate_loader = DataLoader(validateSet, 
+                             batch_size=hyperVar["batch_size"], 
+                             shuffle=False, 
+                             num_workers=hyperVar['num_workers'])
+
+test_loader = DataLoader(testSet, 
+                         batch_size=hyperVar["batch_size"], 
+                         shuffle=False, 
+                         num_workers=hyperVar['num_workers'])
 
 load_time = time.time() - start_time
 print(f"Data loaded in {load_time:.2f} seconds")
@@ -288,7 +304,6 @@ def supervised_evaluator(model, device="cpu"):
             X_batch, Y_batch = batch
             X, Y = X_batch.to(device), Y_batch.to(device)
             Y_pred = model(X)
-            # Removed masking unvalid predictions
             return Y_pred, Y
 
     engine = Engine(_interference)
@@ -441,7 +456,10 @@ else:
 
  # %%   ------Evaluation of the model------
 set = testSet
-
+perc_error_per_parameter(
+    # Need to add correct transform function
+    output_transform=lambda x: (x[0], x[1]), device=device
+).attach(evaluator, 'perc_pp')
 print("Python <<<<< legit everything else (except C)\n")
 state = evaluator.run(test_loader)
 test_loss = state.metrics['loss']
@@ -576,6 +594,16 @@ print("\nGenerating predictions vs actual plots...")
 fig_predictions = plot_predictions_vs_actual(model, test_loader, device,
                                              name=f'predictions_vs_actual_{hyperVar["suffix"]}', n_samples=5)
 
-end_script_time = time.time()
-total_time = end_script_time - start_script_time
-print(f"\nTotal script time: {total_time/60:.2f} minutes")
+def Plot_perc_error(percs, name):
+    plt.figure(figsize=(10, 6))
+    plt.bar(range(len(percs)), percs.cpu().numpy())
+    plt.xlabel('Parameter Index')
+    plt.ylabel('Average Percentage Error (%)')
+    plt.title('Percentage Error per Parameter on Test Set')
+    plt.grid(True)
+
+    os.makedirs('pdfs', exist_ok=True)
+    plt.savefig(f'pdfs/{name}.pdf', bbox_inches='tight', dpi=300)
+
+Plot_perc_error(state.metrics['perc_pp'], name=f'pepp_{hyperVar["suffix"]}')
+print(f"\nTotal script time: {(time.time() - start_script_time)/60:.2f} minutes")
