@@ -33,13 +33,13 @@ def scale_tensor(dat_raw, std=False, minmax=False, const=True):
     if std:
         # Here dat_raw is expected to be of shape (n_samples, n_channels, height, width)
         for i in range(dat_raw.shape[0]):
-            batch = dat_raw[i]
-            mean = lib.mean(batch)
-            std = lib.std(batch)
+            channel = dat_raw[i]
+            mean = lib.mean(channel)
+            std = lib.std(channel)
             if std > 0:  # Avoid division by zero
-                dat_raw[i] = (batch - mean) / std
+                dat_raw[i] = (channel - mean) / std
             else:
-                dat_raw[i] = batch - mean
+                dat_raw[i] = channel - mean
     
     # Min-max normalization to [0,1]
     if minmax:
@@ -209,7 +209,7 @@ class SignalDataset(Dataset):
         
         # Next, We'd like to scale each sample individually (notice we don't seperate magnet settings here):
         # Just divides by a constant factor of 10 -- > Maybe change later
-        self.X_sample = self.transform(X_sample, std=False, minmax=False, const=True)
+        self.X_sample = self.transform(X_sample, std=True, minmax=False, const=False)
         self.Y_sample = self.Y[idx]
 
         return self.X_sample, self.Y_sample
@@ -317,5 +317,48 @@ class prediction_diff_histograms(Metric):
         return (histograms, bin_edges)
 
 
+class find_outliers(Metric):
+    '''
+    Identifies outliers based on a percentage error threshold.
+    Returns the id of outlier samples for each parameter.
+    '''
+    def __init__(self, threshold=1000.0, output_transform=lambda x: x, device="cpu"):
+        self.threshold = threshold
+        super(find_outliers, self).__init__(output_transform=output_transform, device=device)
 
+    def reset(self):
+        self.outliers = {}
+        self.sample_count = 0
+
+    def update(self, output):
+        y_pred, y = output
+        batch_size = y.shape[0]
+        n_params = y.shape[1]
+
+        abs_errors = torch.abs(y_pred - y)
+        perc_errors = abs_errors / torch.clamp(torch.abs(y), min=1e-8) * 100
+        
+        # Identify outliers
+        is_outlier = perc_errors > self.threshold
+        # shape = (batch_size, n_params)
+        
+        # Generate global indices for this batch
+        # This assumes the metric is updated sequentially over the dataset
+        batch_indices = torch.arange(self.sample_count, self.sample_count + batch_size, device=y.device)
+        # shape = (batch_size,)
+        
+        for i in range(n_params):
+            # Get indices for this parameter where error is high
+            param_outliers = batch_indices[is_outlier[:, i]] 
+            if len(param_outliers) > 0:
+                if i not in self.outliers:
+                    self.outliers[i] = []
+                self.outliers[i].extend(param_outliers.cpu().tolist())
+
+        self.sample_count += batch_size
+
+    def compute(self):
+        for param_idx, outlier_ids in self.outliers.items():
+            print(f"Parameter {param_idx}: {len(outlier_ids)} outliers.")
+        return self.outliers
 

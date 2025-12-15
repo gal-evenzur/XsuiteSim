@@ -468,8 +468,12 @@ perc_error_per_parameter(
 prediction_diff_histograms(
     output_transform=lambda x: (x[0], x[1]), device=device
 ).attach(evaluator, 'param_hists')
-print("Python <<<<< legit everything else (except C)\n")
 
+find_outliers(
+    output_transform=lambda x: (x[0], x[1]), device=device
+).attach(evaluator, 'outliers')
+
+print("Python <<<<< legit everything else (except C)\n")
 
 if hyperVar['cluster_flag']:
     ProgressBar().attach(evaluator, output_transform=lambda x: {'loss': x})
@@ -621,6 +625,7 @@ def Plot_perc_error(percs, name):
 Plot_perc_error(state.metrics['perc_pp'], name=f'pepp_{hyperVar["suffix"]}')
 print(f"\nTotal script time: {(time.time() - start_script_time)/60:.2f} minutes")
 
+
 def Plot_Parameter_Histograms(diff_histograms, diff_bins, name):
     # Here we plot n_params 1D histogram subplots in a grid
     n_params = len(diff_histograms)
@@ -644,3 +649,45 @@ def Plot_Parameter_Histograms(diff_histograms, diff_bins, name):
 diff_histograms = state.metrics['param_hists'][0]
 diff_bin_edges = state.metrics['param_hists'][1]
 Plot_Parameter_Histograms(diff_histograms, diff_bin_edges, name=f'param_histograms_{hyperVar["suffix"]}')
+
+
+def plot_n_outliers_per_parameter(outliers_info, dataset, name):
+    if not outliers_info:
+        print("No outliers detected.")
+        return
+
+    # Find the parameter with the most outliers to visualize
+    worst_param_idx = max(outliers_info, key=lambda k: len(outliers_info[k]))
+    outlier_indices = outliers_info[worst_param_idx]
+    
+    # Limit to 3 samples
+    n_samples = min(3, len(outlier_indices))
+    indices_to_plot = outlier_indices[:n_samples]
+    
+    print(f"Plotting {n_samples} outliers for Parameter {worst_param_idx} (Total outliers for this param: {len(outlier_indices)})")
+
+    # Plot all 3 channels
+    fig, axes = plt.subplots(3, n_samples, figsize=(4 * n_samples, 12))
+
+    for i, idx in enumerate(indices_to_plot):
+        X_sample, Y_sample = dataset[idx]
+        X_sample = X_sample.unsqueeze(0).to(device)  # Add batch dimension and move to device
+        with torch.no_grad():
+            Y_pred = model(X_sample).cpu().squeeze(0)  # Get prediction and remove batch dimension
+
+        # Plot each channel
+        for ch in range(3):
+            ax = axes[ch, i]
+            img = X_sample.cpu().squeeze(0)[ch].numpy()  # Get the channel image
+            im = ax.imshow(img, origin='lower', aspect='auto')
+            ax.set_title(f'Sample {idx} - Channel {ch+1}\nActual: {Y_sample[worst_param_idx]:.4f}, Predicted: {Y_pred[worst_param_idx]:.4f}')
+            ax.set_xlabel('X bins')
+            ax.set_ylabel('Y bins')
+            plt.colorbar(im, ax=ax)
+
+    plt.tight_layout()
+    os.makedirs('pdfs', exist_ok=True)
+    plt.savefig(f'pdfs/{name}.pdf', bbox_inches='tight', dpi=300)
+outliers_info = state.metrics['outliers']
+plot_n_outliers_per_parameter(outliers_info, testSet, name=f'outliers_{hyperVar["suffix"]}')
+
