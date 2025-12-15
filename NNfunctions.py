@@ -23,12 +23,15 @@ def import_histograms_hd5(filename, split='train'):
 
 
 def scale_tensor(dat_raw, std=False, minmax=False, const=True):
+    orig_dim = dat_raw.dim()
+    dat_raw = dat_raw.unsqueeze(0) if dat_raw.dim() == 3 else dat_raw
     if isinstance(dat_raw, torch.Tensor):
         lib = torch
     else:
         lib = np
 
     if std:
+        # Here dat_raw is expected to be of shape (n_samples, n_channels, height, width)
         for i in range(dat_raw.shape[0]):
             batch = dat_raw[i]
             mean = lib.mean(batch)
@@ -56,7 +59,7 @@ def scale_tensor(dat_raw, std=False, minmax=False, const=True):
         else:
             dat_raw = lib.zeros_like(dat_raw)
 
-
+    dat_raw = dat_raw.squeeze(0) if orig_dim == 3 else dat_raw
     return dat_raw
 
 def scale_Y(Y_raw, std=False, minmax=True):
@@ -283,6 +286,7 @@ class prediction_diff_histograms(Metric):
 
     def update(self, output):
         y_pred, y = output
+        # y, y_pred shape: (batch_size, n_parameters)
         abs_errors = torch.abs(y_pred - y)
         perc_errors = abs_errors / torch.clamp(torch.abs(y), min=1e-8) * 100  # Avoid division by zero
         perc_errors_param_first = perc_errors.transpose(0, 1)  # shape: (n_parameters, batch_size)
@@ -295,12 +299,22 @@ class prediction_diff_histograms(Metric):
         self.n_samples += y.shape[0]
 
     def compute(self):
-        histograms = []
-        for i in range(self.diff_matrix.shape[0]):  # For each parameter
-            param_errors = self.diff_matrix[i].cpu().numpy()  # shape: (n_samples,)
-            hist, bin_edges = np.histogram(param_errors, bins=50, range=(0, 100))  # Histogram from 0% to 100%
-            histograms.append((hist, bin_edges))
-        return histograms
+        n_parameters = self.diff_matrix.shape[0]
+        n_bins = 50  # Number of histogram bins
+        histograms = np.zeros((n_parameters, n_bins))
+        bin_edges = np.zeros((n_parameters, n_bins + 1))
+
+        for i in range(n_parameters):
+            max_val = torch.max(self.diff_matrix[i]).item()
+            bin_edges[i] = np.logspace(np.log10(0.01), np.log10(max_val), n_bins + 1)
+            histograms[i], bin_edges[i] = np.histogram(
+                self.diff_matrix[i].cpu().numpy(), 
+                bins=bin_edges[i]
+            )
+
+        print(f"Calculated diff histograms for {n_parameters} parameters over {self.n_samples} samples.")
+        print(f"Histogram shape: {histograms.shape}, Bin edges shape: {bin_edges.shape}")
+        return (histograms, bin_edges)
 
 
 

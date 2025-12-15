@@ -1,4 +1,5 @@
 # %% IMPORTS #
+print("Importing libraries...")
 import time
 import sys
 sys.modules['horovod'] = None
@@ -36,7 +37,7 @@ hyperVar = {
     'batch_size': 8, # Bigger = stable gradients and smaller updates
     'device': device,
     'cluster_flag': cluster_flag,
-    'num_workers': 0,  # Number of DataLoader workers
+    'num_workers': 4,  # Number of DataLoader workers
 
     # Model parameters
     'Bnumber': 0,  # 0 for B0, 1 for B1, 2 for B2
@@ -74,7 +75,7 @@ hyperVar['suffix'] = f'[tests]{criterion.__class__.__name__}_B_{hyperVar["Bnumbe
 # %% &&&&&& IMPORTING DATA &&&&&&
 start_time = time.time()
 data_path = '/storage/agrp/galeven/Data_new/uncompressed_merged_data_2.h5'
-trainSet, validateSet, testSet = CreateTrainValTest(data_path, 0.8, 0.1, seed=120112)
+trainSet, validateSet, testSet = CreateTrainValTest(data_path, 0.8, 0.17, seed=120112)
 
 dataloader = DataLoader(trainSet, 
                         batch_size=hyperVar["batch_size"], 
@@ -468,6 +469,11 @@ prediction_diff_histograms(
     output_transform=lambda x: (x[0], x[1]), device=device
 ).attach(evaluator, 'param_hists')
 print("Python <<<<< legit everything else (except C)\n")
+
+
+if hyperVar['cluster_flag']:
+    ProgressBar().attach(evaluator, output_transform=lambda x: {'loss': x})
+
 state = evaluator.run(test_loader)
 test_loss = state.metrics['loss']
 print(f"Test Loss: {test_loss:.4f}")
@@ -615,23 +621,26 @@ def Plot_perc_error(percs, name):
 Plot_perc_error(state.metrics['perc_pp'], name=f'pepp_{hyperVar["suffix"]}')
 print(f"\nTotal script time: {(time.time() - start_script_time)/60:.2f} minutes")
 
-def Plot_Parameter_Histograms(historams, name):
-    n_params = len(historams[0])
+def Plot_Parameter_Histograms(diff_histograms, diff_bins, name):
+    # Here we plot n_params 1D histogram subplots in a grid
+    n_params = len(diff_histograms)
     n_cols = 3
     n_rows = (n_params + n_cols - 1) // n_cols  # Ceiling division
 
-    plt.figure(figsize=(5 * n_cols, 4 * n_rows))
-
+    # Create subplots
+    fig, axes = plt.subplots(n_rows, n_cols, figsize=(5*n_cols, 4*n_rows))
+    axes = axes.flatten()
     for i in range(n_params):
-        plt.subplot(n_rows, n_cols, i + 1)
-        plt.hist(historams[i].cpu().numpy(), bins=30, alpha=0.7, color='blue', edgecolor='black')
-        plt.title(f'Parameter {i} Prediction Differences')
-        plt.xlabel('Difference')
-        plt.ylabel('Frequency')
-        plt.grid(True)
+        ax = axes[i]
+        # hist shape: (num_bins,)
+        ax.semilogy(diff_bins[i][:-1], diff_histograms[i], drawstyle='steps-post')
+        ax.set_title(f'Parameter {i+1} Histogram of Differences')
+        ax.set_xlabel('Bins')
+        ax.set_ylabel('Counts')
 
     plt.tight_layout()
     os.makedirs('pdfs', exist_ok=True)
     plt.savefig(f'pdfs/{name}.pdf', bbox_inches='tight', dpi=300)
-
-Plot_Parameter_Histograms(state.metrics['param_hists'], name=f'param_histograms_{hyperVar["suffix"]}')
+diff_histograms = state.metrics['param_hists'][0]
+diff_bin_edges = state.metrics['param_hists'][1]
+Plot_Parameter_Histograms(diff_histograms, diff_bin_edges, name=f'param_histograms_{hyperVar["suffix"]}')
