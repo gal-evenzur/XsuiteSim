@@ -36,7 +36,7 @@ hyperVar = {
     'batch_size': 8, # Bigger = stable gradients and smaller updates
     'device': device,
     'cluster_flag': cluster_flag,
-    'num_workers': 8,  # Number of DataLoader workers
+    'num_workers': 0,  # Number of DataLoader workers
 
     # Model parameters
     'Bnumber': 0,  # 0 for B0, 1 for B1, 2 for B2
@@ -65,7 +65,7 @@ hyperVar = {
     'n_plotted': 10,
 }
 
-criterion = nn.SmoothL1Loss()
+criterion = nn.L1Loss()
 
 hyperVar['suffix'] = f'[tests]{criterion.__class__.__name__}_B_{hyperVar["Bnumber"]}_wd{hyperVar["weight_decay"]}_bs{hyperVar["batch_size"]}'
 
@@ -75,8 +75,8 @@ print("NUM WORKERS:", hyperVar['num_workers'], "BATCH SIZE:", hyperVar['batch_si
 
 # %% &&&&&& IMPORTING DATA &&&&&&
 start_time = time.time()
-data_path = 'merged_data/merged_data_2.h5'
-trainSet, validateSet, testSet = CreateTrainValTest(data_path, 0.8, 0.1, seed=1138)
+data_path = '/storage/agrp/galeven/Data_new/uncompressed_merged_data_2.h5'
+trainSet, validateSet, testSet = CreateTrainValTest(data_path, 0.8, 0.1, seed=120112)
 
 dataloader = DataLoader(trainSet, 
                         batch_size=hyperVar["batch_size"], 
@@ -150,6 +150,8 @@ class EfficientNet(nn.Module):
         # --- Adapt the final layer for regression ---
         num_ftrs = self.net.classifier[1].in_features
         self.net.classifier[1] = nn.Linear(num_ftrs, n_classes)
+        # Add activation
+        
 
         # --- Unfreeze the new layers so they can be trained ---
         if pretrained and freeze_pretrained:
@@ -399,7 +401,7 @@ def run_validation_loss_track(engine):
             f"Validation Loss: {val_loss:.4f}, Best Epoch: {best_model_info['epoch']}")
     print("Current LRs:", [f"{a:.2e}" for a in lr[-1]])
 
-if not hyperVar['cluster_flag']:
+if hyperVar['cluster_flag']:
     ProgressBar().attach(trainer, output_transform=lambda x: {'loss': x})
 
 # %% CHECKPOINTS #
@@ -446,7 +448,7 @@ else:
 
 # %% ********TRAINING*********
 print("--TRAINING---")
-trainer.run(dataloader, max_epochs=hyperVar['n_epochs'])
+# trainer.run(dataloader, max_epochs=hyperVar['n_epochs'])
 
 # Restore the best model
 if best_model_info['params'] is not None:
