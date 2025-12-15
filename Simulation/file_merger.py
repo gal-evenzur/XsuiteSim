@@ -296,7 +296,71 @@ input_files = get_hdf5_files(input_directory)
 pydir = os.path.dirname(os.path.abspath(__file__)) # This results "~/fresh-start/Simulation"
 homedir = os.path.dirname(pydir)  # This results "~/fresh-start"
 
-output_file = os.path.join(homedir, "merged_data", "merged_data_long.h5")
+large_file = os.path.join(homedir, "merged_data", "merged_data_2.h5")
+
+
+def decompress_and_store(source_file: str, target_directory: str, verbose: bool = True):
+    """
+    Read all data from a compressed HDF5 file and store it uncompressed in a new location.
+    
+    Args:
+        source_file: Path to the compressed HDF5 file to read from
+        target_directory: Directory where the uncompressed file will be stored
+        verbose: Whether to print progress information
+    """
+    
+    # Create target directory if it doesn't exist
+    os.makedirs(target_directory, exist_ok=True)
+    
+    # Create output filename
+    source_filename = os.path.basename(source_file)
+    target_file = os.path.join(target_directory, f"uncompressed_{source_filename}")
+    
+    if verbose:
+        print(f"Decompressing {source_file} to {target_file}")
+    
+    try:
+        with h5py.File(source_file, 'r') as src_f:
+            with h5py.File(target_file, 'w') as dst_f:
+                
+                # Copy global datasets without compression
+                for key in src_f.keys():
+                    if isinstance(src_f[key], h5py.Dataset):
+                        data = src_f[key][:]
+                        dst_f.create_dataset(key, data=data)
+                        if verbose:
+                            print(f"  Copied dataset {key}: {data.shape}")
+                
+                # Copy groups and their datasets without compression
+                for key in src_f.keys():
+                    if isinstance(src_f[key], h5py.Group):
+                        src_group = src_f[key]
+                        dst_group = dst_f.create_group(key)
+                        
+                        for subkey in src_group.keys():
+                            if isinstance(src_group[subkey], h5py.Dataset):
+                                data = src_group[subkey][:]
+                                dst_group.create_dataset(subkey, data=data)
+                                if verbose:
+                                    print(f"  Copied dataset {key}/{subkey}: {data.shape}")
+                
+                # Copy attributes
+                for attr_name, attr_value in src_f.attrs.items():
+                    dst_f.attrs[attr_name] = attr_value
+        
+        if verbose:
+            print(f"Successfully decompressed and stored data at {target_file}")
+            
+    except Exception as e:
+        print(f"Error during decompression: {str(e)}")
+        # Clean up partial file if error occurred
+        if os.path.exists(target_file):
+            os.remove(target_file)
+        raise
+
+# Decompress and store the merged data
+target_dir = "/storage/agrp/galeven/Data_new"
+decompress_and_store(large_file, target_dir, verbose=True)
 
 # Optional: Check structure of input files before merging
 # print("Input file structures:")
@@ -304,9 +368,9 @@ output_file = os.path.join(homedir, "merged_data", "merged_data_long.h5")
 #     if os.path.exists(file_path):
 #         get_dataset_info(file_path)
 
-# Merge the files
-merge_hdf5_files(input_files, output_file, verbose=True)
+# # Merge the files
+# merge_hdf5_files(input_files, output_file, verbose=True)
 
-# Check the merged file structure
-print("\nMerged file structure:")
-get_dataset_info(output_file)
+# # Check the merged file structure
+# print("\nMerged file structure:")
+# get_dataset_info(output_file)
