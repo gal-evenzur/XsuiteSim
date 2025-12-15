@@ -15,9 +15,8 @@ cd ${BASEPATH}
 cd NN_batchScripts
 ### User Input ###
 ### ========== ###
-CKPT_FLAG=0 # 0: start from scratch, 1: from checkpoint 1, 2: from checkpoint 2...
+CKPT_FLAG=18 # 0: start from scratch, 1: from checkpoint 1, 2: from checkpoint 2...
 echo "starting training..."
-for CKPT_FLAG in {1..11}
-do
-    qsub -q N -v BASEPATH="${BASEPATH}",CKPT_FLAG="${CKPT_FLAG}" -o ${LOGDIR} -e ${LOGDIR} pyTrain.sh
-done
+
+qsub -q N -v BASEPATH="${BASEPATH}",CKPT_FLAG="${CKPT_FLAG}" -o ${LOGDIR} -e ${LOGDIR} pyTrain.sh
+

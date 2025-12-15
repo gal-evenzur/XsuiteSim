@@ -267,3 +267,41 @@ class perc_error_per_parameter(Metric):
     def compute(self):
         return self.sum_errors / self.num_examples if self.num_examples > 0 else 0.0
 
+
+class prediction_diff_histograms(Metric):
+    '''
+    Returns a histogram of prediction differences for each parameter. 
+    returns a list of histograms, one per parameter.
+    '''
+
+    def __init__(self, output_transform=lambda x: x, device="cpu"):
+        super(prediction_diff_histograms, self).__init__(output_transform=output_transform, device=device)
+
+    def reset(self):
+        self.diff_matrix = None
+        self.n_samples = 0
+
+    def update(self, output):
+        y_pred, y = output
+        abs_errors = torch.abs(y_pred - y)
+        perc_errors = abs_errors / torch.clamp(torch.abs(y), min=1e-8) * 100  # Avoid division by zero
+        perc_errors_param_first = perc_errors.transpose(0, 1)  # shape: (n_parameters, batch_size)
+        
+        if self.diff_matrix is None:
+            self.diff_matrix = perc_errors_param_first
+        else:
+            self.diff_matrix = torch.cat((self.diff_matrix, perc_errors_param_first), dim=1) 
+            # dim=0 is param dimension, dim=1 is batch dimension
+        self.n_samples += y.shape[0]
+
+    def compute(self):
+        histograms = []
+        for i in range(self.diff_matrix.shape[0]):  # For each parameter
+            param_errors = self.diff_matrix[i].cpu().numpy()  # shape: (n_samples,)
+            hist, bin_edges = np.histogram(param_errors, bins=50, range=(0, 100))  # Histogram from 0% to 100%
+            histograms.append((hist, bin_edges))
+        return histograms
+
+
+
+

@@ -70,50 +70,6 @@ criterion = nn.L1Loss()
 hyperVar['suffix'] = f'[tests]{criterion.__class__.__name__}_B_{hyperVar["Bnumber"]}_wd{hyperVar["weight_decay"]}_bs{hyperVar["batch_size"]}'
 
 
-# %% CHECKPOINTS #
-
-print("CHOOSE CHECKPOINT...")
-# Ask user if they want to resume training from a checkpoint
-checkpoint_dir = "./checkpoints"
-os.makedirs(checkpoint_dir, exist_ok=True)
-if os.path.exists(checkpoint_dir):
-    files = [f for f in os.listdir(checkpoint_dir) if f.endswith('.pt') or f.endswith('.pth')]
-    
-    if files:
-        print("\nAvailable checkpoint files:")
-        for i, file in enumerate(files):
-            print(f"{i+1}. {file}")
-        
-        while True:
-            try:
-
-                try:
-                    choice = int(sys.argv[1])
-                except:
-                    choice = int(input("\nSelect checkpoint number (or 0 to cancel): "))
-
-                if choice == 0:
-                    print("Canceled. Starting training from scratch...")
-                    break
-                elif 1 <= choice <= len(files):
-                    checkpoint_path = os.path.join(checkpoint_dir, files[choice-1])
-                    print(f"Loading checkpoint: {checkpoint_path}")
-                    # Load the model state
-                    checkpoint = torch.load(checkpoint_path, map_location=device)
-                    model.load_state_dict(checkpoint)
-                    break
-                else:
-                    print(f"Invalid choice. Please select a number between 0 and {len(files)}.")
-            except ValueError:
-                print("Please enter a valid number.")
-    else:
-        print("No checkpoint files found in the directory.")
-else:
-    print(f"Checkpoint directory {checkpoint_dir} does not exist.")
-    
-print("NUM WORKERS:", hyperVar['num_workers'], "BATCH SIZE:", hyperVar['batch_size'])
-
-
 
 # %% &&&&&& IMPORTING DATA &&&&&&
 start_time = time.time()
@@ -172,18 +128,18 @@ class EfficientNet(nn.Module):
             for param in self.net.parameters():
                 param.requires_grad = False
 
-        # # --- Adapt for 1-channel (grayscale) input ---
-        # original_conv = self.net.features[0][0]  # First conv layer in EfficientNet
-        # self.net.features[0][0] = nn.Conv2d(
-        #     in_channels=3,
-        #     out_channels=original_conv.out_channels,
-        #     kernel_size=original_conv.kernel_size,
-        #     stride=original_conv.stride,
-        #     padding=original_conv.padding,
-        #     bias=False
-        # )
-        # if pretrained:
-        #     with torch.no_grad(): #assign channels
+        if pretrained:
+            # --- Adapt for 1-channel (grayscale) input ---
+            original_conv = self.net.features[0][0]  # First conv layer in EfficientNet
+            self.net.features[0][0] = nn.Conv2d(
+                in_channels=3,
+                out_channels=original_conv.out_channels,
+                kernel_size=original_conv.kernel_size,
+                stride=original_conv.stride,
+                padding=original_conv.padding,
+                bias=False
+            )
+            with torch.no_grad(): #assign channels
                 w = original_conv.weight.data
                 # Initialize each of the 3 channels with the same averaged weights
                 averaged_weights = w.mean(dim=1, keepdim=True)
@@ -446,6 +402,50 @@ def run_validation_loss_track(engine):
 if hyperVar['cluster_flag']:
     ProgressBar().attach(trainer, output_transform=lambda x: {'loss': x})
 
+# %% CHECKPOINTS #
+
+print("CHOOSE CHECKPOINT...")
+# Ask user if they want to resume training from a checkpoint
+checkpoint_dir = "./checkpoints"
+os.makedirs(checkpoint_dir, exist_ok=True)
+if os.path.exists(checkpoint_dir):
+    files = [f for f in os.listdir(checkpoint_dir) if f.endswith('.pt') or f.endswith('.pth')]
+    
+    if files:
+        print("\nAvailable checkpoint files:")
+        for i, file in enumerate(files):
+            print(f"{i+1}. {file}")
+        
+        while True:
+            try:
+
+                try:
+                    choice = int(sys.argv[1])
+                except:
+                    choice = int(input("\nSelect checkpoint number (or 0 to cancel): "))
+
+                if choice == 0:
+                    print("Canceled. Starting training from scratch...")
+                    break
+                elif 1 <= choice <= len(files):
+                    checkpoint_path = os.path.join(checkpoint_dir, files[choice-1])
+                    print(f"Loading checkpoint: {checkpoint_path}")
+                    # Load the model state
+                    checkpoint = torch.load(checkpoint_path, map_location=device)
+                    model.load_state_dict(checkpoint)
+                    break
+                else:
+                    print(f"Invalid choice. Please select a number between 0 and {len(files)}.")
+            except ValueError:
+                print("Please enter a valid number.")
+    else:
+        print("No checkpoint files found in the directory.")
+else:
+    print(f"Checkpoint directory {checkpoint_dir} does not exist.")
+    
+print("NUM WORKERS:", hyperVar['num_workers'], "BATCH SIZE:", hyperVar['batch_size'])
+
+
 # %% ********TRAINING*********
 print("--TRAINING---")
 # trainer.run(dataloader, max_epochs=hyperVar['n_epochs'])
@@ -463,6 +463,10 @@ perc_error_per_parameter(
     # Need to add correct transform function
     output_transform=lambda x: (x[0], x[1]), device=device
 ).attach(evaluator, 'perc_pp')
+
+prediction_diff_histograms(
+    output_transform=lambda x: (x[0], x[1]), device=device
+).attach(evaluator, 'param_hists')
 print("Python <<<<< legit everything else (except C)\n")
 state = evaluator.run(test_loader)
 test_loss = state.metrics['loss']
@@ -610,3 +614,24 @@ def Plot_perc_error(percs, name):
 
 Plot_perc_error(state.metrics['perc_pp'], name=f'pepp_{hyperVar["suffix"]}')
 print(f"\nTotal script time: {(time.time() - start_script_time)/60:.2f} minutes")
+
+def Plot_Parameter_Histograms(historams, name):
+    n_params = len(historams[0])
+    n_cols = 3
+    n_rows = (n_params + n_cols - 1) // n_cols  # Ceiling division
+
+    plt.figure(figsize=(5 * n_cols, 4 * n_rows))
+
+    for i in range(n_params):
+        plt.subplot(n_rows, n_cols, i + 1)
+        plt.hist(historams[i].cpu().numpy(), bins=30, alpha=0.7, color='blue', edgecolor='black')
+        plt.title(f'Parameter {i} Prediction Differences')
+        plt.xlabel('Difference')
+        plt.ylabel('Frequency')
+        plt.grid(True)
+
+    plt.tight_layout()
+    os.makedirs('pdfs', exist_ok=True)
+    plt.savefig(f'pdfs/{name}.pdf', bbox_inches='tight', dpi=300)
+
+Plot_Parameter_Histograms(state.metrics['param_hists'], name=f'param_histograms_{hyperVar["suffix"]}')
