@@ -32,14 +32,15 @@ def scale_tensor(dat_raw, std=False, minmax=False, const=True):
 
     if std:
         # Here dat_raw is expected to be of shape (n_samples, n_channels, height, width)
-        for i in range(dat_raw.shape[0]):
-            channel = dat_raw[i]
-            mean = lib.mean(channel)
-            std = lib.std(channel)
-            if std > 0:  # Avoid division by zero
-                dat_raw[i] = (channel - mean) / std
-            else:
-                dat_raw[i] = channel - mean
+        for i in range(dat_raw.shape[0]): # Go through each sample
+            for j in range(dat_raw.shape[1]): # Go through each channel
+                channel = dat_raw[i, j]
+                mean = lib.mean(channel)
+                std = lib.std(channel)
+                if std > 0:  # Avoid division by zero
+                    dat_raw[i, j] = (channel - mean) / std
+                else:
+                    dat_raw[i, j] = channel - mean
     
     # Min-max normalization to [0,1]
     if minmax:
