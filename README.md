@@ -47,10 +47,10 @@ _for linux/mac_
 You don't need to download the wsl extension, so your life is easier. In vscode, press ctrl+shift+p, write `Python: Select interpreter`, and choose the created environment. 
 And that's it folks.
 
-## Simulation Folder Structure
+# Simulation Folder Structure
 The `Simulation/` folder contains all the necessary code to run the particle tracking simulations using Xsuite. 
 
-### Key Files
+## Key Files
 *   **`sim_functions.py`**: This is the core library. It contains functions to:
     *   Define the beamline lattice (`line_init`, `quadElement`, `dipoleElement`).
     *   Generate particles (`GenerateGaussianBeam`, `generate_secondary_particles`).
@@ -62,15 +62,15 @@ The `Simulation/` folder contains all the necessary code to run the particle tra
 *   **`basic_usage.ipynb`**: A Jupyter Notebook tutorial that demonstrates how to set up a simple simulation, track particles, and visualize the results. **Start here!**
 *   **`SIMULATION_DOCS.md`**: A comprehensive documentation file that explains the code structure, physics models, and implementation details in depth.
 
-### Where to find explanations?
+## Where to find explanations?
 1.  **For a quick start**: Open `basic_usage.ipynb` and run through the cells to see the simulation in action.
 2.  **For understanding the code**: Read `SIMULATION_DOCS.md`. It provides a high-level overview and a function dictionary.
 3.  **For detailed function logic**: Open `sim_functions.py` or `bremss.py`. Every function has a detailed docstring explaining its inputs, outputs, and physical significance.
 
-## Dataset Generation
+# Dataset Generation
 To train the Neural Network, you first need to generate a dataset of particle tracks. This is a two-step process: generating many small data files, and then merging them into one large dataset.
 
-### Step 1: Generate Data Files
+## Step 1: Generate Data Files
 The script `Simulation/create_dataset.py` runs the simulation and saves the results.
 **Usage:**
 ```bash
@@ -88,7 +88,7 @@ This will create `./my_data/Data_2/h_1.h5`.
 **Batch Generation (Cluster):**
 To generate a large dataset, you typically run this script hundreds or thousands of times in parallel on a cluster. The folder `Simulation/batchScripts/` contains scripts (`qsubCreate.sh`, `pyRun.sh`) for submitting these jobs to a scheduler (like PBS).
 
-### Step 2: Merge Data Files
+## Step 2: Merge Data Files
 After generating many `h_*.h5` files, you need to merge them into a single file for efficient training.
 **Usage:**
 ```bash
@@ -98,10 +98,10 @@ python Simulation/file_merger.py <storage_path>
 
 This will produce a merged file (e.g., `merged_data.h5`) in the storage directory.
 
-## Neural Network Training
+# Neural Network Training
 The Neural Network is trained using the `Regression_Eff.py` script.
 
-### Configuration
+## Configuration
 Before running, open `Regression_Eff.py` and check the following:
 1.  **Data Path**: Find the line `data_path = ...` (around line 80). **You must change this** to point to your merged .h5 file from the previous step.
 2.  **Hyperparameters**: The `hyperVar` dictionary (around line 40) controls the training:
@@ -109,7 +109,7 @@ Before running, open `Regression_Eff.py` and check the following:
     *   `n_epochs`: Total number of training passes.
     *   `h_lr`, `b_lr`: Learning rates for the head and body of the network.
 
-### Running the Training
+## Running the Training
 **Local Run:**
 ```bash
 python Regression_Eff.py
@@ -121,16 +121,16 @@ The folder `NN_batchScripts/` contains scripts for running the training on a clu
 *   `pyTrain.sh`: The execution script.
 *   `qsubTrain.sh`: The submission script.
 
-## File Dictionary & Necessity
+# File Dictionary & Necessity
 Here is a breakdown of the key files and why they are needed:
 
-### Simulation Files (`Simulation/`)
+## Simulation Files (`Simulation/`)
 *   **`create_dataset.py`**: The main script to generate training data. It runs the physics simulation with randomized parameters.
 *   **`file_merger.py`**: Combines thousands of small simulation files into one big dataset for the NN.
 *   **`dataset_funcs.py`**: Helper functions for data generation (e.g., randomizing beam parameters).
 *   **`batchScripts/`**: Scripts to automate running `create_dataset.py` on a computing cluster.
 
-### Neural Network Files
+## Neural Network Files
 *   **`Regression_Eff.py`**: The main script for training the Neural Network. It defines the model architecture (EfficientNet), the training loop, and evaluation metrics.
 *   **`NNfunctions.py`**: Contains utility functions for the NN, including:
     *   `SignalDataset`: A PyTorch Dataset class that loads and processes the .h5 data.
