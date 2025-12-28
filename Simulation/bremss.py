@@ -1,3 +1,47 @@
+"""
+BREMSSTRAHLUNG AND PAIR PRODUCTION MODULE
+=========================================
+
+This module provides functions to calculate and sample from energy spectra 
+associated with electromagnetic interactions in matter, specifically 
+Bremsstrahlung and Pair Production.
+
+It is used to simulate the generation of secondary particles (e.g., positrons)
+when a primary beam hits a target (e.g., Aluminum foil).
+
+KEY FUNCTIONS
+-------------
+1.  `build_pdfs(Emin, Emax, X0, t_cm, npts)`:
+    -   Calculates the theoretical energy distributions for photons (Bremsstrahlung) 
+        and positrons (Pair Production) based on the Bethe-Heitler approximation.
+    -   Returns arrays: `E_vals` (energy grid), `photon_vals` (PDF), `eplus_vals` (PDF).
+    -   This should be called once during initialization to prepare the PDFs.
+
+2.  `sample_from_pdf_on_bins(E_vals, pdf_vals, ...)`:
+    -   Draws random energy samples from the provided PDF.
+    -   Used in the simulation loop to assign energies to new secondary particles.
+
+USAGE EXAMPLE
+-------------
+    import bremss as br
+
+    # 1. Setup parameters
+    X0 = 8.897  # Radiation length of Al [cm]
+    t_cm = 0.01 # Target thickness [cm]
+    Emin, Emax = 0.01, 5.0 # Energy range [GeV]
+
+    # 2. Build PDFs (do this once)
+    E_vals, pdf_gamma, pdf_eplus = br.build_pdfs(Emin, Emax, X0, t_cm)
+
+    # 3. Sample energies for N particles
+    energies = br.sample_from_pdf_on_bins(E_vals, pdf_eplus, nsamples=1000)
+
+PHYSICS BACKGROUND
+------------------
+The module uses the Bethe-Heitler approximations for the differential cross-sections
+of Bremsstrahlung (photon emission by electrons) and Pair Production (e+/e- creation 
+by photons).
+"""
 import numpy as np
 from numpy.random import default_rng
 from scipy.integrate import quad
