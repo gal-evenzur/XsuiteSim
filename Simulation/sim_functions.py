@@ -91,6 +91,24 @@ def B_T_to_k(B_T, p_mks, q_mks):
 # %% * * * * * P A R T I C L E S * * * * 
 
 def generate_secondary_particles(shifts, n_particles, verbose=True, rng=default_rng()):
+    """
+    Generates a distribution of secondary particles (e.g., positrons) for simulation.
+
+    This function simulates the creation of a primary beam, propagates it to a target 
+    (Aluminum foil or Beryllium window), and then simulates the production of secondary 
+    particles.
+
+    Args:
+        shifts (dict): Dictionary containing alignment shifts and beam parameters.
+        n_particles (int): Number of particles to generate.
+        verbose (bool): If True, prints progress messages.
+        rng (numpy.random.Generator): Random number generator instance.
+
+    Returns:
+        list: A list of particle states at the foil/window. Each state is a list:
+              [x, y, z, px, py, pz, mass, charge]
+              Units: x,y,z [m]; px,py,pz [GeV/c]; mass [GeV/c^2]; charge [e]
+    """
     states = []
     for i in range(int(n_particles)):
         ### particle species
@@ -225,6 +243,21 @@ def particles_from_states(states, ref, verbose=False):
     return particles
 
 def GenerateGaussianBeam(E_GeV,mass_GeV,charge,shifts, mks=False, rng=default_rng()):
+    """
+    Generates a single particle state from a Gaussian beam distribution.
+
+    Args:
+        E_GeV (float): Mean energy of the beam in GeV.
+        mass_GeV (float): Mass of the particle in GeV/c^2.
+        charge (float): Charge of the particle in elementary charge units.
+        shifts (dict): Dictionary containing beam parameters (focus, offsets).
+        mks (bool): If True, returns momenta in kg*m/s and mass in kg. 
+                    If False, returns momenta in GeV/c and mass in GeV/c^2.
+        rng (numpy.random.Generator): Random number generator instance.
+
+    Returns:
+        list: Particle state [x, y, z, px, py, pz, mass, charge].
+    """
     fx0     = shifts['beam']['fx0']
     fy0     = shifts['beam']['fy0']
     fz0     = shifts['beam']['fz0']
@@ -340,6 +373,27 @@ def state_GeV_to_kgms(state):
 
 def quadElement(env, spacer, name, k1, length, max_x, max_y, r_pipe, 
                 dx=0, dy=0, ang_z=0, ang_x=0, ang_y=0):
+    """
+    Creates a Quadrupole element with apertures and alignment shifts.
+
+    Args:
+        env (xtrack.Environment): The environment to add the element to.
+        spacer (str): Name of the spacer element.
+        name (str): Name of the quadrupole.
+        k1 (str or float): Normalized quadrupole strength [m^-2].
+        length (float): Length of the quadrupole [m].
+        max_x (float): Horizontal aperture limit [m].
+        max_y (float): Vertical aperture limit [m].
+        r_pipe (float): Beam pipe radius [m].
+        dx (float): Horizontal shift [m].
+        dy (float): Vertical shift [m].
+        ang_z (float): Rotation around z-axis (roll) [rad].
+        ang_x (float): Rotation around x-axis (pitch) [rad].
+        ang_y (float): Rotation around y-axis (yaw) [rad].
+
+    Returns:
+        list: A list of components forming the quadrupole assembly.
+    """
     env.new(f'a_{name}', xt.LimitRectEllipse,
              max_x=max_x, max_y=max_y, a=r_pipe, b=r_pipe)
     
@@ -370,6 +424,29 @@ def quadElement(env, spacer, name, k1, length, max_x, max_y, r_pipe,
 def dipoleElement(env, spacer, name, k0, length, max_x, max_y, r_pipe,
                   min_x=0, min_y=0, 
                   dx=0, dy=0, ang_z=0, ang_x=0, ang_y=0):
+    """
+    Creates a Dipole (Bend) element with apertures and alignment shifts.
+
+    Args:
+        env (xtrack.Environment): The environment to add the element to.
+        spacer (str): Name of the spacer element.
+        name (str): Name of the dipole.
+        k0 (str or float): Normalized dipole strength (curvature) [m^-1].
+        length (float): Length of the dipole [m].
+        max_x (float): Max horizontal aperture [m].
+        max_y (float): Max vertical aperture [m].
+        r_pipe (float): Beam pipe radius [m].
+        min_x (float): Min horizontal aperture [m].
+        min_y (float): Min vertical aperture [m].
+        dx (float): Horizontal shift [m].
+        dy (float): Vertical shift [m].
+        ang_z (float): Rotation around z-axis [rad].
+        ang_x (float): Rotation around x-axis [rad].
+        ang_y (float): Rotation around y-axis [rad].
+
+    Returns:
+        list: A list of components forming the dipole assembly.
+    """
     env.new(f'a_{name}', xt.LimitRectEllipse,
              max_x=max_x, max_y=max_y, a=r_pipe, b=r_pipe)
     env.new(f'a_{name}_out', xt.LimitRect, min_x=min_x, max_x=max_x, min_y=min_y, max_y=max_y),
@@ -412,6 +489,29 @@ def dipoleElement(env, spacer, name, k0, length, max_x, max_y, r_pipe,
     return dElement
 
 def line_init(shifts, verbose=False):
+    """
+    Initializes the beamline lattice using xtrack.
+
+    Constructs the beamline elements (drifts, quads, dipoles) based on the 
+    defined sizes and magnet settings. Applies alignment shifts.
+
+    A subtle note on the different xsuite element models:
+    xt.LimitRect and xt.LimitRectEllipse are used to define apertures.
+    xt.Quadrupole and xt.Bend define the magnetic elements.
+    xt.ParticlesMonitor is used to monitor particles at specific locations - can be used as a detector.
+    xt.SRotation, xt.XRotation, xt.YRotation, xt.XYShift are used to apply alignment shifts and rotations.
+    "spacer" elements are needed between two "thin" elements to avoid issues in the tracking (it solves a xsuite bug).
+
+    Args:
+        shifts (dict): Dictionary containing magnet settings and alignment shifts.
+        verbose (bool): If True, prints initialization details.
+
+    Returns:
+        tuple: (line, env, ref)
+            - line (xtrack.Line): The assembled beamline.
+            - env (xtrack.Environment): The environment object.
+            - ref (dict): Reference particle properties.
+    """
     m = round(float(shifts['magnetSettings']), 1)
     Grad1 = magsetvals[m][0]
     Grad2 = magsetvals[m][1]
@@ -490,6 +590,23 @@ def line_init(shifts, verbose=False):
 
 # Go element by element and track particles
 def track_line(line, particles):
+    """
+    Tracks particles through the beamline element by element.
+
+    This function iterates through each element in the line, tracks the particles,
+    and records their state at each step. This allows for detailed analysis of 
+    trajectories and losses along the line.
+
+    Args:
+        line (xtrack.Line): The beamline object.
+        particles (xtrack.Particles): The initial particle distribution.
+
+    Returns:
+        tuple: (particle_list, s_values)
+            - particle_list (list): List of xtrack.Particles objects representing 
+              the state after each element.
+            - s_values (numpy.ndarray): Array of longitudinal positions (s) for each step.
+    """
     # Track particles through each element and plot the divergence
     tt = line.get_table()
     elements_names = [el for el in line.element_names]
@@ -1200,3 +1317,6 @@ def xy_plot_line(line, particle_dir, ele_str, elementNames, n_bin=100):
     
     print(f"Finished plotting {elementNames} XY distributions.")
 
+
+# %%
+A

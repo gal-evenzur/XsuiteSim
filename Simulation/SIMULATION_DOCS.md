@@ -4,21 +4,25 @@
 
 | Function | File | Description |
 | :--- | :--- | :--- |
-| [`line_init`](Simulation/sim_functions.py#L414) | `sim_functions.py` | Initializes the beamline, constructing elements and applying misalignments. |
-| [`quadElement`](Simulation/sim_functions.py#L341) | `sim_functions.py` | Helper to create a quadrupole with apertures and shifts. |
-| [`dipoleElement`](Simulation/sim_functions.py#L370) | `sim_functions.py` | Helper to create a dipole with apertures and shifts. |
-| [`grad_kG_to_k`](Simulation/sim_functions.py#L81) | `sim_functions.py` | Converts quadrupole gradient (kG/cm) to normalized strength $k_1$. |
-| [`B_T_to_k`](Simulation/sim_functions.py#L87) | `sim_functions.py` | Converts dipole field (T) to normalized bending strength $k_0$. |
-| [`GenerateGaussianBeam`](Simulation/sim_functions.py#L227) | `sim_functions.py` | Generates initial 6D coordinates for a single particle. |
-| [`generate_secondary_particles`](Simulation/sim_functions.py#L93) | `sim_functions.py` | Generates a batch of particles, handling secondary physics. |
-| [`track_monitor`](Simulation/sim_functions.py#L550) | `sim_functions.py` | Tracks particles through the line and returns the monitor image. |
-| [`rand_from_scratch_histogram`](Simulation/dataset_funcs.py#L7) | `dataset_funcs.py` | Main loop for generating a batch of randomized data. |
-| [`shifts_array_random`](Simulation/dataset_funcs.py#L236) | `dataset_funcs.py` | Generates random misalignment configurations from ranges. |
-| [`is_valid`](Simulation/dataset_funcs.py#L295) | `dataset_funcs.py` | Validates if a generated histogram has sufficient hits. |
-| [`save_histogarms_hd5`](Simulation/dataset_funcs.py#L130) | `dataset_funcs.py` | Saves generated data batches to HDF5 format. |
-| [`merge_hdf5_files`](Simulation/file_merger.py#L54) | `file_merger.py` | Merges multiple partial HDF5 datasets into one file. |
+| [`line_init`](sim_functions.py#L414) | `sim_functions.py` | Initializes the beamline, constructing elements and applying misalignments. |
+| [`quadElement`](sim_functions.py#L341) | `sim_functions.py` | Helper to create a quadrupole with apertures and shifts. |
+| [`dipoleElement`](sim_functions.py#L370) | `sim_functions.py` | Helper to create a dipole with apertures and shifts. |
+| [`grad_kG_to_k`](sim_functions.py#L81) | `sim_functions.py` | Converts quadrupole gradient (kG/cm) to normalized strength $k_1$. |
+| [`B_T_to_k`](sim_functions.py#L87) | `sim_functions.py` | Converts dipole field (T) to normalized bending strength $k_0$. |
+| [`GenerateGaussianBeam`](sim_functions.py#L227) | `sim_functions.py` | Generates initial 6D coordinates for a single particle. |
+| [`generate_secondary_particles`](sim_functions.py#L93) | `sim_functions.py` | Generates a batch of particles, handling secondary physics. |
+| [`track_monitor`](sim_functions.py#L550) | `sim_functions.py` | Tracks particles through the line and returns the monitor image. |
+| [`rand_from_scratch_histogram`](dataset_funcs.py#L7) | `dataset_funcs.py` | Main loop for generating a batch of randomized data. |
+| [`shifts_array_random`](dataset_funcs.py#L236) | `dataset_funcs.py` | Generates random misalignment configurations from ranges. |
+| [`is_valid`](dataset_funcs.py#L295) | `dataset_funcs.py` | Validates if a generated histogram has sufficient hits. |
+| [`save_histogarms_hd5`](dataset_funcs.py#L130) | `dataset_funcs.py` | Saves generated data batches to HDF5 format. |
+| [`merge_hdf5_files`](file_merger.py#L54) | `file_merger.py` | Merges multiple partial HDF5 datasets into one file. |
 
 This document explains the implementation of the simulation and data creation pipeline using `xsuite` (xtrack, xpart). The code is primarily located in the `Simulation/` directory.
+
+### Further refrences:
+- ['basic_usage.ipynb'](basic_usage.ipynb) a tutorial on how to run the basic line with basic particles
+- ['xsuite docs'](https://xsuite.readthedocs.io/en/latest/usersguide.html) and especially the pages on <u>Xsuite environment</u>, <u>Track</u> and lastly <u>Particles</u> 
 
 ## 1. The Line Itself
 
@@ -75,12 +79,7 @@ The `shifts_range` dictionary mirrors the structure of `shifts` but defines the 
 - **Usage**: This dictionary tells the random number generator the valid bounds for each parameter. For example, `shifts_range['q0']['x'] = (-2e-2, 2e-2)` means the x-shift of q0 will be sampled uniformly between -2cm and +2cm.
 - **Why those values?**: I don't want to generate a parameter which will kill all my particles. Using trail and error, I've determined that for bigger ranges than the ones chosen, there are very few instances which can create a surviving particle configuration. 
 
-
-## 4. Randomization
-
-Randomization is a critical part of the simulation for generating diverse datasets. It is implemented using the `numpy.random.Generator` API to ensure reproducibility.
-
-## 5. Dataset Creation
+## 4. Dataset Creation
 The final HDF5 file produced by the simulation (after merging) contains datasets with the following dimensions:
 - **Histograms**: `(N_samples, N_magnet_settings, Width, Height)`
   - `Width` = 256, `Height` = 128 (defined by `monitor_bins`)
@@ -120,7 +119,7 @@ The simulation is typically run in many parallel jobs, each producing a small HD
 - **Usage**: `python Simulation/file_merger.py [directory_path]`
 
 
-## 6. Generating Random Data from Ranges
+## 5. Generating Random Data from Ranges
 The randomization logic is encapsulated in `shifts_array_random` (in `Simulation/dataset_funcs.py`).
 1.  **Iteration**: The function iterates through every key in the `shifts_range` dictionary.
 2.  **Sampling**: For each parameter, if a tuple `(min, max)` is found, it uses `rng.uniform(min, max)` to generate a random value within that interval.
