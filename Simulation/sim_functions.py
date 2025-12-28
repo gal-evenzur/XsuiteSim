@@ -10,6 +10,48 @@ import bremss as br
 from params import *
 from copy import deepcopy
 import time
+
+"""
+SIMULATION FUNCTIONS MODULE
+===========================
+
+This module contains the core functions for setting up and running the particle simulation using Xsuite.
+It is designed to help a physicist define a beamline, generate particles, and track them.
+
+BIG PICTURE OVERVIEW
+--------------------
+1.  **Particle Generation**:
+    -   We start by generating a primary beam of particles (e.g., electrons or positrons) with a Gaussian distribution in phase space.
+    -   This is handled by `GenerateGaussianBeam`.
+    -   The beam is then propagated to a target (foil/window) where secondary particles are produced.
+    -   `generate_secondary_particles` manages this process, including the interaction with the target.
+
+2.  **Resampling / Secondary Production**:
+    -   When particles hit the target, they interact and produce secondary particles (e.g., bremsstrahlung, pair production).
+    -   We simulate this by resampling the particle energies from a physics-based Probability Density Function (PDF).
+    -   `simulate_secondary_production` uses `br.sample_from_pdf_on_bins` to sample new energies for the particles, effectively "resampling" them based on the physics of the interaction.
+
+3.  **Line Definition (Xsuite)**:
+    -   The beamline is defined using `xtrack`.
+    -   A "Line" in Xsuite is a sequence of elements (magnets, drifts, apertures, monitors).
+    -   We define helper functions `quadElement` and `dipoleElement` to create complex elements that include:
+        -   The magnetic element itself (Quadrupole, Bend).
+        -   Apertures (LimitRect, LimitRectEllipse) to define the physical pipe dimensions.
+        -   Alignment shifts and rotations (XYShift, SRotation, etc.) to simulate misalignments.
+    -   `line_init` assembles these elements into a complete beamline.
+
+4.  **Tracking**:
+    -   Once the line and particles are defined, we track the particles through the line.
+    -   `track_line` moves particles element-by-element, recording their positions.
+    -   `track_monitor` tracks particles to the end and records data at specific monitors.
+
+KEY CONCEPTS 
+------------------------------
+-   **Xsuite Line**: Think of it as a list of optical elements. You build it by appending elements in order.
+-   **Particles**: Represented as `xpart.Particles` objects. They carry normalized coordinates (x, px, y, py, zeta, delta).
+-   **Resampling**: Instead of running a full Monte Carlo for every interaction, we often sample from pre-calculated distributions (PDFs) to speed up the simulation while maintaining physical accuracy.
+"""
+
 plt.rcParams['image.cmap'] = 'afmhot'
 # %% +++++++++Monitor sizes 
 npix_x = 1024
@@ -61,6 +103,16 @@ sizes = { # min_x, max_x, min_y, max_y in m, start z, stop z, length in m
 # %% INITIALIZATION
 
 def p_from_E(E, E_rest):
+    """
+    Calculate momentum from total energy and rest energy.
+    
+    Args:
+        E (float): Total energy in eV.
+        E_rest (float): Rest energy (mass * c^2) in eV.
+        
+    Returns:
+        float: Momentum in eV/c.
+    """
     # m is in eV / c2
     # E_rest = m * c2
     # E is in eV
@@ -79,12 +131,40 @@ ref = { # All in natural units
 }
 
 def grad_kG_to_k(grad_kG, p_mks, q_mks):
+    """
+    Convert quadrupole gradient from kG/m to normalized strength k1 [m^-2].
+    
+    1 kG = 0.1 T.
+    
+    k1 = (q*grad/p)
+    
+    Args:
+        grad_kG (float): Gradient in kG/m.
+        p_mks (float): Momentum in kg*m/s.
+        q_mks (float): Charge in Coulombs.
+        
+    Returns:
+        float: Normalized quadrupole strength k1 in m^-2.
+    """
     kG_to_T = 0.1
     grad_T = grad_kG * kG_to_T  # grad in T/m 
     k = q_mks * grad_T / p_mks  # k in 1/m
     return k
 
 def B_T_to_k(B_T, p_mks, q_mks):
+    """
+    Convert dipole magnetic field B to normalized curvature k0 [m^-1].
+    
+    k0 = 1/rho = (q/p) * B
+    
+    Args:
+        B_T (float): Magnetic field in Tesla.
+        p_mks (float): Momentum in kg*m/s.
+        q_mks (float): Charge in Coulombs.
+        
+    Returns:
+        float: Normalized dipole strength (curvature) k0 in m^-1.
+    """
     k = q_mks * B_T / p_mks  # k in 1/m
     return k
 
@@ -94,9 +174,15 @@ def generate_secondary_particles(shifts, n_particles, verbose=True, rng=default_
     """
     Generates a distribution of secondary particles (e.g., positrons) for simulation.
 
-    This function simulates the creation of a primary beam, propagates it to a target 
-    (Aluminum foil or Beryllium window), and then simulates the production of secondary 
-    particles.
+    This function simulates the full process of creating a primary beam, propagating it 
+    to a target (Aluminum foil or Beryllium window), and then simulating the production 
+    of secondary particles at that target.
+
+    The workflow is:
+    1.  Generate primary particles (e.g., electrons) using `GenerateGaussianBeam`.
+    2.  Propagate these particles in vacuum to the target position (Z0).
+    3.  Simulate the interaction at the target using `simulate_secondary_production`, 
+        which resamples the energy and smears the phase space to mimic secondary production.
 
     Args:
         shifts (dict): Dictionary containing alignment shifts and beam parameters.
@@ -110,28 +196,41 @@ def generate_secondary_particles(shifts, n_particles, verbose=True, rng=default_
               Units: x,y,z [m]; px,py,pz [GeV/c]; mass [GeV/c^2]; charge [e]
     """
     states = []
+    # Loop to generate N primary particles
     for i in range(int(n_particles)):
         ### particle species
-        QQ = +1  ## unit charge, positron
+        QQ = +1  ## unit charge, positron (or whatever the primary is intended to be)
         mass_GeV = (MM*u['c2'])/u['GeV_to_kgm2s2'] ## GeV
-        E_GeV = 10 # GeV
+        E_GeV = 10 # GeV - Primary beam energy
+        
+        # Generate a single primary particle state
         state = GenerateGaussianBeam(E_GeV,mass_GeV,QQ, shifts, rng=rng)
         states.append(state)
+        
     if verbose: print("Finised creating beam")
+    
+    # Define target positions
     zAL     = +30 ### the aluminum foil, cm
     zBe     = -84 ### the beryllium window, cm
+    
+    # Select target based on magnet settings (example logic)
     Z0      = zBe if(shifts['magnetSettings']==502) else zAL
     Z0_m    = Z0*u['cm_to_m']
 
 
-    ### plot the "positrons"
+    ### Process each particle to create secondaries
     primary_states_at_foil = []
     secondary_states_at_foil = []
     for i, state in enumerate(states):
+        # 1. Propagate the primary particle from its creation point to the target (Z0_m)
         primary_state_at_foil = propagate_state_in_vacuum_to_z(state,Z0_m)
         primary_states_at_foil.append(primary_state_at_foil)
+        
+        # 2. Simulate the secondary production interaction at the target
+        # This modifies the particle's energy and potentially smears its position/momentum
         secondary_state_at_foil = simulate_secondary_production(primary_state_at_foil,rng=rng, q=+1,Emin=Emin,Emax=Emax,smear_T=smear_T,smear_pT=smear_pT)
         secondary_states_at_foil.append(secondary_state_at_foil)
+        
         if verbose and i%10000 == 0:
             print(f"created {i} particles")
 
@@ -246,6 +345,10 @@ def GenerateGaussianBeam(E_GeV,mass_GeV,charge,shifts, mks=False, rng=default_rn
     """
     Generates a single particle state from a Gaussian beam distribution.
 
+    This function creates a particle with coordinates (x, y, z, px, py, pz) sampled from 
+    a Gaussian distribution defined by the beam parameters (emittance, beta function, sigma).
+    It simulates a beam focused at a specific point (fbeamfocus).
+
     Args:
         E_GeV (float): Mean energy of the beam in GeV.
         mass_GeV (float): Mass of the particle in GeV/c^2.
@@ -258,46 +361,83 @@ def GenerateGaussianBeam(E_GeV,mass_GeV,charge,shifts, mks=False, rng=default_rn
     Returns:
         list: Particle state [x, y, z, px, py, pz, mass, charge].
     """
+    # Extract beam parameters from the 'shifts' dictionary
     fx0     = shifts['beam']['fx0']
     fy0     = shifts['beam']['fy0']
     fz0     = shifts['beam']['fz0']
     fbeamfocus  = shifts['beam']['fbeamfocus']
 
+    # Calculate relativistic Lorentz factor gamma (approx E/m)
     lf          = E_GeV/mass_GeV
+    
+    # Calculate geometric emittance from normalized emittance (epsilon_geom = epsilon_norm / gamma)
+    # Here 50e-3 mm-mrad is the normalized emittance
     femittancex = 50e-3*u['mm_to_m']/lf ### mm-rad
     femittancey = 50e-3*u['mm_to_m']/lf ### mm-rad
+    
+    # Calculate Beta function at the waist (beta* = sigma^2 / epsilon)
     fbetax      = (fsigmax**2)/femittancex
     fbetay      = (fsigmay**2)/femittancey
-    ### z
+    
+    ### Longitudinal (z) distribution
     z0     = rng.normal(fz0,fsigmaz)
-    zdrift = z0 - fbeamfocus ### correct drift distance for x, y distribution. Forces the beam to pass through the IP (i.e. focuesd at z=0)
-    ### x
+    
+    # Calculate drift distance from the particle's z position to the focal point
+    # This forces the beam to be focused at z = fbeamfocus (usually 0 or the IP)
+    zdrift = z0 - fbeamfocus 
+    
+    ### Horizontal (x) distribution
+    # Beam size at zdrift: sigma(z) = sigma(0) * sqrt(1 + (z/beta)^2)
     sigmax  = fsigmax * np.sqrt(1.0 + (zdrift/fbetax)**2)
     x0      = rng.normal(fx0, sigmax)
+    
+    # Mean divergence (angle) correlated with position for a focusing beam
     meandx  = x0*zdrift / (zdrift**2 + fbetax**2)
+    # Divergence spread
     sigmadx = np.sqrt( femittancex*fbetax / (zdrift**2 + fbetax**2) )
     dx0     = rng.normal(meandx, sigmadx)
-    ### y
+    
+    ### Vertical (y) distribution (same logic as x)
     sigmay  = fsigmay * np.sqrt(1.0 + (zdrift/fbetay)**2)
     y0      = rng.normal(fy0, sigmay)
     meandy  = y0*zdrift / (zdrift**2 + fbetay**2)
     sigmady = np.sqrt( femittancey*fbetay / (zdrift**2 + fbetay**2) )
     dy0     = rng.normal(meandy, sigmady)
-    ### p
+    
+    ### Momentum reconstruction
+    # Total momentum magnitude p ~= E (for relativistic particles)
+    # pz is derived from the angles dx0 = px/pz, dy0 = py/pz
+    # p^2 = px^2 + py^2 + pz^2 = pz^2 (dx^2 + dy^2 + 1)
     pz = np.sqrt( (E_GeV**2 - mass_GeV**2)/ (dx0**2 + dy0**2 + 1.0) )
     px = dx0*pz
     py = dy0*pz
+    
+    # Convert to MKS units if requested
     pz0 = pz*u['GeV_to_kgms'] # kg*m/s
     px0 = px*u['GeV_to_kgms'] # kg*m/s
     py0 = py*u['GeV_to_kgms'] # kg*m/s
     mass_kg = mass_GeV*u['GeV_to_kgm2s2']/u['c2'] # kg
-    ### state
+    
+    ### Return state vector
     state_mks = [x0,y0,z0, px0,py0,pz0, mass_kg,charge] ### [x[m],y[m],z[m], px[kg*m/s],py[kg*m/s],pz[kg*m/s], m[kg],q[unit]]
     state_nat = [x0,y0,z0, px,py,pz, mass_GeV,charge]   ### [x[m],y[m],z[m], px[GeV],py[GeV],pz[GeV], m[GeV],q[unit]]
     return state_mks if(mks) else state_nat
 
 
 def propagate_state_in_vacuum_to_z(state, z):
+    """
+    Propagates a particle state in vacuum to a specific z-position.
+
+    This function assumes a drift in free space (no magnetic fields).
+    It calculates the new x and y positions based on the particle's momentum angles.
+
+    Args:
+        state (list): Initial state [x, y, z, px, py, pz, mass, charge].
+        z (float): Target z-position [m].
+
+    Returns:
+        list: Propagated state [x_new, y_new, z, px, py, pz, mass, charge].
+    """
     if(z==state[2]): return state
     x0 = state[0]
     y0 = state[1]
@@ -317,14 +457,27 @@ def propagate_state_in_vacuum_to_z(state, z):
     return state_at_z
 
 
-def truncated_exp_NK(a,b,how_many, rng=default_rng()):
-    a = -np.log(a)
-    b = -np.log(b)
-    rands = np.exp(-(rng.random(how_many)*(b-a) + a))
-    return rands[0] if(how_many==1) else rands
-
-
 def simulate_secondary_production(primary_state, rng=default_rng(), q=+1,Emin=0.5,Emax=5,smear_T=False,smear_pT=False):    
+    """
+    Simulates the production of a secondary particle from a primary particle.
+
+    This function takes a primary particle state and transforms it into a secondary particle.
+    The key transformation is the resampling of the energy (E) from a physics-based PDF 
+    (e.g., bremsstrahlung spectrum), while preserving the direction (mostly) or applying 
+    some smearing.
+
+    Args:
+        primary_state (list): [x, y, z, px, py, pz, mass, charge] of the primary particle.
+        rng (numpy.random.Generator): Random number generator.
+        q (int): Charge of the secondary particle.
+        Emin (float): Minimum energy for the secondary particle [GeV].
+        Emax (float): Maximum energy for the secondary particle [GeV].
+        smear_T (bool): If True, apply Gaussian smearing to transverse position (x, y).
+        smear_pT (bool): If True, apply Gaussian smearing to transverse momentum (px, py).
+
+    Returns:
+        list: Secondary particle state [x, y, z, px, py, pz, mass, charge].
+    """
     x      = primary_state[0]
     y      = primary_state[1]
     z      = primary_state[2]
@@ -332,30 +485,55 @@ def simulate_secondary_production(primary_state, rng=default_rng(), q=+1,Emin=0.
     py     = primary_state[4]
     pz     = primary_state[5]
     mass   = primary_state[6]
-    ### smear trasverse position
+    
+    ### Smear transverse position (optional)
+    # Simulates beam spot size increase or scattering effects
     if(smear_T):
         x = x + rng.normal(0,smear_sigma_T_um*u['um_to_m'])
         y = y + rng.normal(0,smear_sigma_T_um*u['um_to_m'])
-    ### smear trasverse momenta
+        
+    ### Smear transverse momenta (optional)
+    # Simulates angular scattering
     if(smear_pT):
         px = px + rng.normal(0,smear_sigma_P_GeV) 
         py = py + rng.normal(0,smear_sigma_P_GeV)
     
-    ### sample energy like in bremss
-
-    # E = truncated_exp_NK(Emin,Emax, 1) if(Emax>Emin) else Emin # GeV
+    ### Sample energy from a Physics PDF
+    # This is the core "resampling" step. Instead of using the primary's energy,
+    # we pick a new energy E from a distribution defined in `br.sample_from_pdf_on_bins`.
+    # This distribution (E_vals, eplus) likely represents the energy spectrum of 
+    # secondary particles (e.g., positrons from pair production).
+    
+    # E = truncated_exp_NK(Emin,Emax, 1) if(Emax>Emin) else Emin # GeV (Alternative simple exponential)
+    
+    # Sample until we get a value within [Emin, Emax]
     E = br.sample_from_pdf_on_bins(E_vals, eplus, nsamples=1, rng=rng)
-    while(E[0]<Emin or E[0]>Emax): E = br.sample_from_pdf_on_bins(E_vals, eplus, nsamples=1, rng=rng)
+    while(E[0]<Emin or E[0]>Emax): 
+        E = br.sample_from_pdf_on_bins(E_vals, eplus, nsamples=1, rng=rng)
     E = E[0]
 
 
-    ### assume the x-y momemnta staty the same and correct the z momentum
+    ### Reconstruct longitudinal momentum (pz)
+    # We assume the transverse momenta (px, py) are largely preserved (or just smeared),
+    # and we recalculate pz to satisfy the relativistic energy-momentum relation:
+    # E^2 = p^2 + m^2 = (px^2 + py^2 + pz^2) + m^2
+    # => pz = sqrt(E^2 - m^2 - px^2 - py^2)
     pz = np.sqrt( E**2 - mass**2 - px**2 - py**2 ) # GeV
+    
     secondary_state = [x,y,z, px,py,pz, mass, q]
     return secondary_state
 
 
 def state_GeV_to_kgms(state):
+    """
+    Converts a particle state from Natural Units (GeV) to SI Units (kg, m, s).
+
+    Args:
+        state (list): State in [x, y, z, px[GeV], py[GeV], pz[GeV], mass[GeV], charge].
+
+    Returns:
+        list: State in [x, y, z, px[kg m/s], py[kg m/s], pz[kg m/s], mass[kg], charge].
+    """
     state_mks = [0]*len(state)
     state_mks[0] = state[0]
     state_mks[1] = state[1]
@@ -376,9 +554,18 @@ def quadElement(env, spacer, name, k1, length, max_x, max_y, r_pipe,
     """
     Creates a Quadrupole element with apertures and alignment shifts.
 
+    In Xsuite, a real physical magnet with misalignments and apertures is often modeled 
+    as a sequence of thin elements. This function constructs such a sequence:
+    1.  **Rotations**: To simulate tilt/roll (SRotation, XRotation, YRotation).
+    2.  **Shifts**: To simulate offset (XYShift).
+    3.  **Aperture**: To define the physical limits (LimitRectEllipse).
+    4.  **Magnet**: The actual magnetic field element (Quadrupole).
+    5.  **Inverse Transformations**: To restore the coordinate system after the magnet, 
+        so the rest of the line is in the global frame.
+
     Args:
         env (xtrack.Environment): The environment to add the element to.
-        spacer (str): Name of the spacer element.
+        spacer (str): Name of the spacer element (drift).
         name (str): Name of the quadrupole.
         k1 (str or float): Normalized quadrupole strength [m^-2].
         length (float): Length of the quadrupole [m].
@@ -394,9 +581,12 @@ def quadElement(env, spacer, name, k1, length, max_x, max_y, r_pipe,
     Returns:
         list: A list of components forming the quadrupole assembly.
     """
+    # Define the aperture element (Rectangular + Elliptical limit)
     env.new(f'a_{name}', xt.LimitRectEllipse,
              max_x=max_x, max_y=max_y, a=r_pipe, b=r_pipe)
     
+    # Create the line segment for this quadrupole
+    # Note the sandwich structure: Transformations -> Aperture -> Magnet -> Aperture -> Inverse Transformations
     qElement = env.new_line(components=[
         env.new(f"rots_{name}", xt.SRotation, angle=ang_z),
         spacer,
@@ -406,9 +596,9 @@ def quadElement(env, spacer, name, k1, length, max_x, max_y, r_pipe,
         spacer,
         env.new(f'xy_{name}', xt.XYShift, dx=-dx, dy=-dy),
         spacer,
-        f'a_{name}',
-        env.new(name, xt.Quadrupole, length=length, k1=k1),
-        f'a_{name}',
+        f'a_{name}', # Aperture at entrance
+        env.new(name, xt.Quadrupole, length=length, k1=k1), # The Magnet
+        f'a_{name}', # Aperture at exit
         spacer,
         env.new(f'xy_restore_{name}', xt.XYShift, dx=dx, dy=dy),
         spacer,
@@ -427,6 +617,8 @@ def dipoleElement(env, spacer, name, k0, length, max_x, max_y, r_pipe,
     """
     Creates a Dipole (Bend) element with apertures and alignment shifts.
 
+    Similar to quadElement, this constructs a dipole assembly with misalignments and apertures.
+    
     Args:
         env (xtrack.Environment): The environment to add the element to.
         spacer (str): Name of the spacer element.
@@ -447,10 +639,12 @@ def dipoleElement(env, spacer, name, k0, length, max_x, max_y, r_pipe,
     Returns:
         list: A list of components forming the dipole assembly.
     """
+    # Define apertures
     env.new(f'a_{name}', xt.LimitRectEllipse,
              max_x=max_x, max_y=max_y, a=r_pipe, b=r_pipe)
     env.new(f'a_{name}_out', xt.LimitRect, min_x=min_x, max_x=max_x, min_y=min_y, max_y=max_y),
 
+    # Helper function to build the sandwich
     def dip(a_in, a_out):
         dElement = env.new_line(components=[
             env.new(f"rots_{name}", xt.SRotation, angle=ang_z),
@@ -461,9 +655,9 @@ def dipoleElement(env, spacer, name, k0, length, max_x, max_y, r_pipe,
             spacer,
             env.new(f'xy_{name}', xt.XYShift, dx=-dx, dy=-dy),
             spacer,
-            a_in,
-            env.new(name, xt.Bend, length=length, k0=k0),
-            a_out,
+            a_in, # Aperture in
+            env.new(name, xt.Bend, length=length, k0=k0), # The Magnet
+            a_out, # Aperture out
             spacer,
             env.new(f'xy_restore_{name}', xt.XYShift, dx=dx, dy=dy),
             spacer,
@@ -479,6 +673,7 @@ def dipoleElement(env, spacer, name, k0, length, max_x, max_y, r_pipe,
 
     if name=='dd': 
         dElement = dip(f'a_{name}', f'a_{name}_out')
+        # Special rotation for 'dd' dipole to make it bend in the vertical plane (Bx field)
         dElement[name].rot_s_rad = -np.pi/2  # to have Bx field
     
     else:
@@ -512,26 +707,35 @@ def line_init(shifts, verbose=False):
             - env (xtrack.Environment): The environment object.
             - ref (dict): Reference particle properties.
     """
+    # Extract magnet settings (gradients)
     m = round(float(shifts['magnetSettings']), 1)
     Grad1 = magsetvals[m][0]
     Grad2 = magsetvals[m][1]
 
+    # Create the Xtrack Environment
+    # The environment stores all the elements and their parameters.
     env = xt.Environment()
+    
+    # Define global parameters (magnet strengths) in the environment
+    # This allows us to refer to them by name ('kq_p', 'kq_n') in the element definitions
     env['kq_p'] = grad_kG_to_k(Grad1, ref['p'] * u['eV_to_kgms'], ref['q'] * u['e'])  # k1 in 1/m^2
     env['kq_n'] = grad_kG_to_k(Grad2, ref['p'] * u['eV_to_kgms'], ref['q'] * u['e'])  
     env['kd'] = B_T_to_k(B_dd, ref['p'] * u['eV_to_kgms'], ref['q'] * u['e'])  # k0 in 1/m , Bx --> +yhat
     env['kd_corr'] = B_T_to_k(B_dd_xcorr, ref['p'] * u['eV_to_kgms'], ref['q'] * u['e']) # By --> -xhat
 
 
-    # Monitor at the end
+    # Monitor at the end (Detector)
     env.new('a_m0', xt.LimitRect, min_x=sizes['m0'][0], max_x=sizes['m0'][1], min_y=sizes['m0'][2], max_y=sizes['m0'][3]),
     env.elements['m0'] = xt.ParticlesMonitor(num_particles=int(n_particles),
                                     start_at_turn=0, stop_at_turn=1,
                                     auto_to_numpy=True)
 
+    # Spacer element (drift of negligible length) to separate thin elements
     spacer = env.new('spacer', xt.Drift, length=1e-6)
-    # Creating Line 
-    # Order: drift - beampipe - quadrupole - aperture
+    
+    # Creating the Line 
+    # The line is a sequence of components. We use `env.new_line` to create it.
+    # We interleave drifts, quadrupoles (via quadElement), and dipoles (via dipoleElement).
     line = env.new_line(components=[
         env.new('dr0', xt.Drift, length=sizes['dr0'][0]),
         quadElement(env, spacer, 'q0', k1='kq_p', length=sizes['q0'][-1],
@@ -568,6 +772,7 @@ def line_init(shifts, verbose=False):
         env.place('m0', at=sizes['m0'][-1]),
     ])
 
+    # Set tracking model (optional, for more accurate integration)
     if use_integration:
         model = 'mat-kick-mat'
         # Go through all elements in the line and update the model attribute if it exists
@@ -577,13 +782,15 @@ def line_init(shifts, verbose=False):
                 if verbose: print(f"Updating model for element {name} from {element.model} to {model}")
                 element.model = model
 
-    # Need to input in natural units
+    # Define the reference particle for the line
+    # This sets the reference momentum/energy for the lattice
     line.particle_ref = xt.Particles( 
         p0c=ref['p'],
         mass0=xt.ELECTRON_MASS_EV,
         q0=ref['q'],
     )
 
+    # Build the tracker (compiles the line for tracking)
     line.build_tracker()
 
     return line, env, ref
@@ -607,7 +814,7 @@ def track_line(line, particles):
               the state after each element.
             - s_values (numpy.ndarray): Array of longitudinal positions (s) for each step.
     """
-    # Track particles through each element and plot the divergence
+    # Get the table of elements (names, positions, etc.)
     tt = line.get_table()
     elements_names = [el for el in line.element_names]
 
@@ -630,9 +837,12 @@ def track_line(line, particles):
         s_values[i+1] = s_stop
 
         # Track through this single element
+        # ele_start=element_name, num_elements=1 tells xtrack to track only this element
         line.track(tracked_particles, ele_start=element_name, num_elements=1)
+        
+        # Save the state of particles after this element
         p_to_list = tracked_particles.copy()
-        p_to_list.sort(interleave_lost_particles=True)
+        p_to_list.sort(interleave_lost_particles=True) # Ensure lost particles are kept in order
         particle_list.append(p_to_list)
 
 
@@ -640,7 +850,23 @@ def track_line(line, particles):
 
 
 def histogram_monitors(line, verbose=False):
+    """
+    Extracts particle data from all monitors in the line and creates 2D histograms.
 
+    This function iterates through all `xt.ParticlesMonitor` elements in the line.
+    It retrieves the x and y coordinates of the recorded particles, filters out 
+    "dead" or unrecorded particles (zeros), and bins them into a 2D histogram.
+
+    Args:
+        line (xtrack.Line): The beamline object containing monitors.
+        verbose (bool): If True, prints particle counts for each monitor.
+
+    Returns:
+        tuple: (h, xedges, yedges)
+            - h (numpy.ndarray): 2D histogram counts.
+            - xedges (numpy.ndarray): Bin edges along x.
+            - yedges (numpy.ndarray): Bin edges along y.
+    """
     m = [el for el in line.elements if isinstance(el, xt.ParticlesMonitor)]
     for i, mon in enumerate(m):
         x, y = np.squeeze(mon.x), np.squeeze(mon.y)
@@ -665,6 +891,19 @@ def histogram_monitors(line, verbose=False):
 
 
 def track_monitor(line, particles):
+    """
+    Tracks particles through the line and returns the monitor histogram.
+
+    This is a convenience function that runs the tracking simulation (`line.track`)
+    and then immediately processes the monitor data using `histogram_monitors`.
+
+    Args:
+        line (xtrack.Line): The beamline object.
+        particles (xtrack.Particles): The initial particle distribution.
+
+    Returns:
+        tuple: (h, xedges, yedges) from `histogram_monitors`.
+    """
     line.track(particles.copy())
 
     h, xedges, yedges = histogram_monitors(line)
@@ -755,6 +994,24 @@ def shifts_array_deterministic(shifts, element, setting, range_vals, magnet_sett
     return shift_matrix
 
 def histogram_mean_std(h, xedges, yedges, ax=None, threshold=3, point_threshold=30):
+    """
+    Calculates the mean and standard deviation of a 2D histogram.
+
+    This function computes the weighted mean and standard deviation of the distribution
+    represented by the histogram `h`. It can optionally plot the mean point and 
+    error bars (representing std dev) on a provided matplotlib axis.
+
+    Args:
+        h (numpy.ndarray): 2D histogram counts.
+        xedges (numpy.ndarray): Bin edges along x.
+        yedges (numpy.ndarray): Bin edges along y.
+        ax (matplotlib.axes.Axes, optional): Axis to plot on.
+        threshold (float): Minimum count threshold to consider a bin.
+        point_threshold (int): Minimum number of valid bins required to compute stats.
+
+    Returns:
+        tuple: (mean_x, std_x, mean_y, std_y) or (None, None, None, None) if insufficient data.
+    """
     mask = h > threshold
     h = np.where(mask, h, 0)
 
@@ -795,6 +1052,22 @@ def histogram_mean_std(h, xedges, yedges, ax=None, threshold=3, point_threshold=
         return mean_x, std_x, mean_y, std_y
 
 def plot_multiple_magnet_settings(shifts_orig, mag_settings, axs=None):
+    """
+    Runs simulations for multiple magnet settings and plots the results.
+
+    This function iterates over a list of magnet settings (e.g., current values or IDs).
+    For each setting, it:
+    1.  Updates the `shifts` dictionary.
+    2.  Re-initializes the beamline (`line_init`).
+    3.  Tracks particles (`track_monitor`).
+    4.  Plots the resulting beam profile histogram on a subplot.
+
+    Args:
+        shifts_orig (dict): Base dictionary of alignment shifts and parameters.
+        mag_settings (list): List of magnet settings to scan.
+        axs (list of matplotlib.axes.Axes, optional): List of axes to plot on. 
+                                                      If None, creates a new figure.
+    """
     if axs is None:
         fig, axs = plt.subplots(1, len(mag_settings), figsize=(len(mag_settings)*6, 5), tight_layout=True)
     shifts = deepcopy(shifts_orig)  # To avoid modifying the original shifts dictionary
@@ -836,6 +1109,22 @@ def plot_multiple_magnet_settings(shifts_orig, mag_settings, axs=None):
 
 # %% {PLotting {} FUNCTIONS}
 def twiss_plot(line, ref):
+    """
+    Calculates and plots the Twiss parameters (optical functions) of the beamline.
+
+    This function uses `line.twiss()` to compute beta functions (betx, bety) and 
+    dispersion (dx, dy) along the line. It also estimates the beam size based on 
+    assumed emittance values.
+
+    Note: Twiss calculation requires a periodic solution or defined initial conditions.
+    Here it uses defined initial conditions (`init`). It skips calculation if a 
+    monitor is present, as monitors can sometimes interfere with the standard Twiss 
+    routine in some Xsuite versions or configurations.
+
+    Args:
+        line (xtrack.Line): The beamline object.
+        ref (dict): Reference parameters including initial Twiss values (betx_0, etc.).
+    """
     init = xt.TwissInit(betx=ref['betx_0'], alfx=ref['alfx_0'], bety=ref['bety_0'], alfy=ref['alfy_0'])  # example values
 
     if 'a_m0' not in line.element_names:
@@ -911,6 +1200,15 @@ def twiss_plot(line, ref):
 
 
 def plot_histogram(x, y, bins, title=""):
+    """
+    Plots a simple 2D histogram of particle positions.
+
+    Args:
+        x (array-like): x coordinates.
+        y (array-like): y coordinates.
+        bins (int or sequence): Bin specification.
+        title (str): Plot title.
+    """
     fig, ax = plt.subplots(figsize=(8, 6))
     ax.hist2d(x, y, bins=bins, cmap='inferno', norm=LogNorm())
     ax.set_xlabel(r'$x$ [m]')
@@ -921,6 +1219,18 @@ def plot_histogram(x, y, bins, title=""):
 
 
 def plot_divergence(XX, PX, YY, PY, title=""):
+    """
+    Plots phase space divergence histograms (x vs px and y vs py).
+
+    This helps visualize the angular spread of the beam.
+
+    Args:
+        XX (array-like): x positions.
+        PX (array-like): Normalized x momenta (px/p0).
+        YY (array-like): y positions.
+        PY (array-like): Normalized y momenta (py/p0).
+        title (str): Overall plot title.
+    """
     fig, axs = plt.subplots(1, 2, figsize=(10, 5), tight_layout=True)
            
     # hdivx = axs[0].hist2d(XX, PX, bins=(100,100), range=[[-6e-4,+6e-4],[-3e-3,+3e-3]], rasterized=True)
@@ -951,6 +1261,16 @@ def plot_divergence(XX, PX, YY, PY, title=""):
 
 
 def particle_lost_at_step(particle_list):
+    """
+    Identifies the tracking step where each particle was lost.
+
+    Args:
+        particle_list (list of xtrack.Particles): List of particle states at each step.
+
+    Returns:
+        numpy.ndarray: Array of indices indicating the step where each particle was lost.
+                       If a particle survives, the index is len(particle_list).
+    """
     # First, determine at which step each particle was lost
     particle_lost_at = np.full(particle_list[0].x.size, len(particle_list))  # Default: particle survives all elements
     for step in range(1, len(particle_list)):
@@ -963,6 +1283,21 @@ def particle_lost_at_step(particle_list):
 
 
 def plot_trajectories(particle_dir, line, n_plot=100, show_dead=False, limit_line_width=2, limit_line_length=0.1):
+    """
+    Plots the trajectories of a subset of particles through the beamline.
+
+    This function visualizes the path of particles (x vs s and y vs s).
+    It can optionally show where particles are lost ("dead" particles).
+    It also draws the positions and apertures of beamline elements.
+
+    Args:
+        particle_dir (dict): Dictionary containing tracking results ('p': particle_list, 's': s_values, 'names': element_names).
+        line (xtrack.Line): The beamline object.
+        n_plot (int): Number of random particles to plot.
+        show_dead (bool): If True, plots trajectories of lost particles in a different color.
+        limit_line_width (float): Width of the aperture limit lines.
+        limit_line_length (float): Length of the aperture limit lines.
+    """
     particle_list = particle_dir['p']
     s_values = particle_dir['s']
     plot_names = particle_dir['names']
@@ -1144,12 +1479,19 @@ def phase_plot_line(line, particle_list):
     """
     Generate phase plane plots for each drift section in the beam line.
     
-    For each drift (except the last one), create a figure with 6 subplots:
-    - Phase plane histogram for the drift itself (x-px and y-py)
-    - Phase plane histogram for the adjacent aperture (x-px and y-py)
-    - Phase plane histogram for the adjacent magnet (x-px and y-py)
+    This function iterates through the drift elements in the line. For each drift 
+    (except the last one), it creates a figure with 6 subplots showing the phase 
+    space histograms (x-px and y-py) for:
+    1. The drift itself.
+    2. The adjacent aperture (beampipe).
+    3. The adjacent magnet.
     
-    For the last drift, create a figure with just 2 subplots showing its phase plane histogram.
+    For the last drift element, it creates a simpler figure with just 2 subplots 
+    showing its phase plane histograms.
+
+    Args:
+        line (xtrack.Line): The beamline object containing element names.
+        particle_list (list of xtrack.Particles): List of particle states at each element.
     """
     # Get all element names in the line
     element_names = line.element_names
@@ -1246,9 +1588,18 @@ def phase_plot_line(line, particle_list):
 
 def xy_plot_line(line, particle_dir, ele_str, elementNames, n_bin=100):
     """
-    Generate XY plots for quadrupoles in the beam line.
-    For each quadrupole, create a figure showing the XY distribution 
-    at both the entrance (before quad) and exit (after quad).
+    Generate XY plots for specific elements (e.g., quadrupoles) in the beam line.
+    
+    For each matching element, this function creates a figure showing the transverse 
+    (XY) particle distribution at both the entrance (before the element) and the 
+    exit (after the element).
+
+    Args:
+        line (xtrack.Line): The beamline object.
+        particle_dir (dict): Dictionary containing tracking results ('p', 's', 'names').
+        ele_str (str): Substring to identify elements to plot (e.g., 'q' for quads).
+        elementNames (str): Descriptive name for the group of elements (e.g., "Quadrupoles").
+        n_bin (int): Number of bins for the 2D histogram.
     """
     # Get all element names in the line
     particle_list = particle_dir['p']
@@ -1316,7 +1667,3 @@ def xy_plot_line(line, particle_dir, ele_str, elementNames, n_bin=100):
     plt.subplots_adjust(top=0.92)
     
     print(f"Finished plotting {elementNames} XY distributions.")
-
-
-# %%
-A
